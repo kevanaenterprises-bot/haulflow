@@ -11,7 +11,11 @@ interface Props {
 }
 
 export default function AssignDriverModal({ load, drivers, onClose, onAssigned }: Props) {
-  const available = drivers.filter(d => d.status === 'available' || d.id === load.driver_id);
+  const available = [...drivers].sort((a, b) => {
+    // Put available drivers first, then on_route, then off_duty
+    const order: Record<string, number> = { available: 0, on_route: 1, off_duty: 2 };
+    return (order[a.status] ?? 1) - (order[b.status] ?? 1);
+  });
   const [selected, setSelected] = useState<string>(load.driver_id || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -43,7 +47,7 @@ export default function AssignDriverModal({ load, drivers, onClose, onAssigned }
 
         <div className="p-6 space-y-3">
           {available.length === 0 && (
-            <p className="text-sm text-gray-500 text-center py-4">No available drivers</p>
+            <p className="text-sm text-gray-500 text-center py-4">No drivers found — add a driver first</p>
           )}
           {available.map(driver => (
             <button
@@ -54,10 +58,17 @@ export default function AssignDriverModal({ load, drivers, onClose, onAssigned }
               <div className="bg-gray-100 p-2 rounded-full">
                 <User className="w-5 h-5 text-gray-500" />
               </div>
-              <div>
+              <div className="flex-1">
                 <div className="font-semibold text-gray-900">{driver.name}</div>
                 {driver.phone && <div className="text-sm text-gray-500">{driver.phone}</div>}
               </div>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                driver.status === 'available' ? 'bg-green-100 text-green-700' :
+                driver.status === 'on_route' ? 'bg-blue-100 text-blue-700' :
+                'bg-gray-100 text-gray-500'
+              }`}>
+                {driver.status?.replace('_', ' ')}
+              </span>
             </button>
           ))}
 
