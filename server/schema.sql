@@ -161,6 +161,15 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='fuel_surcharge') THEN
     ALTER TABLE loads ADD COLUMN fuel_surcharge DECIMAL(10,2);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='password_hash') THEN
+    ALTER TABLE drivers ADD COLUMN password_hash VARCHAR(255);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='pod_url') THEN
+    ALTER TABLE loads ADD COLUMN pod_url TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='auto_invoicing') THEN
+    ALTER TABLE companies ADD COLUMN auto_invoicing BOOLEAN DEFAULT true;
+  END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_loads_company ON loads(company_id);

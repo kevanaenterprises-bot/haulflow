@@ -3,6 +3,7 @@ export type LoadStatus =
   | 'DISPATCHED'
   | 'IN_TRANSIT'
   | 'DELIVERED'
+  | 'WAITING_INVOICING'
   | 'INVOICED'
   | 'PAID';
 

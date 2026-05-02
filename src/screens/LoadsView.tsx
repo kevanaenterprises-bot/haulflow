@@ -7,11 +7,12 @@ import CreateLoadModal from '../components/tms/CreateLoadModal';
 import AssignDriverModal from '../components/tms/AssignDriverModal';
 
 const COLUMNS: { status: LoadStatus; label: string; color: string; bg: string }[] = [
-  { status: 'WAITING_DISPATCH', label: 'Waiting on Dispatch', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
-  { status: 'DISPATCHED',       label: 'Dispatched',          color: 'text-sky-700',   bg: 'bg-sky-50 border-sky-200' },
-  { status: 'IN_TRANSIT',       label: 'In Transit',          color: 'text-blue-700',  bg: 'bg-blue-50 border-blue-200' },
-  { status: 'DELIVERED',        label: 'Delivered',           color: 'text-purple-700',bg: 'bg-purple-50 border-purple-200' },
-  { status: 'INVOICED',         label: 'Invoiced',            color: 'text-emerald-700',bg:'bg-emerald-50 border-emerald-200' },
+  { status: 'WAITING_DISPATCH',   label: 'Waiting on Dispatch',   color: 'text-amber-700',  bg: 'bg-amber-50 border-amber-200' },
+  { status: 'DISPATCHED',         label: 'Dispatched',             color: 'text-sky-700',    bg: 'bg-sky-50 border-sky-200' },
+  { status: 'IN_TRANSIT',         label: 'In Transit',             color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200' },
+  { status: 'DELIVERED',          label: 'Delivered',              color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+  { status: 'WAITING_INVOICING',  label: 'Waiting on Invoicing',   color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
+  { status: 'INVOICED',           label: 'Invoiced',               color: 'text-emerald-700',bg: 'bg-emerald-50 border-emerald-200' },
 ];
 
 export default function LoadsView() {
@@ -107,12 +108,19 @@ export default function LoadsView() {
 
 function LoadCard({ load, onAssign, onRefresh }: { load: Load; onAssign: () => void; onRefresh: () => void }) {
   const [deleting, setDeleting] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
 
   const handleDelete = async () => {
     if (!confirm(`Delete load ${load.load_number}?`)) return;
     setDeleting(true);
     try { await api.delete(`/api/loads/${load.id}`); onRefresh(); }
     catch (e: any) { alert(e.message); setDeleting(false); }
+  };
+
+  const handleCreateInvoice = async () => {
+    setInvoicing(true);
+    try { await api.post(`/api/loads/${load.id}/invoice`, {}); onRefresh(); }
+    catch (e: any) { alert(e.message); setInvoicing(false); }
   };
 
   return (
@@ -171,6 +179,15 @@ function LoadCard({ load, onAssign, onRefresh }: { load: Load; onAssign: () => v
           className="w-full text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1.5 rounded-lg font-medium transition"
         >
           Reassign Driver
+        </button>
+      )}
+      {load.status === 'WAITING_INVOICING' && (
+        <button
+          onClick={handleCreateInvoice}
+          disabled={invoicing}
+          className="w-full text-xs bg-orange-500 hover:bg-orange-600 text-white py-1.5 rounded-lg font-medium transition disabled:opacity-50"
+        >
+          {invoicing ? 'Creating...' : '📄 Create Invoice'}
         </button>
       )}
     </div>

@@ -62,6 +62,92 @@ function authMiddleware(req, res, next) {
 // ── Health ──
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: 'haulflow-v1' }));
 
+// ── Driver auth middleware ──
+function driverAuthMiddleware(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const payload = verifyToken(token);
+  if (!payload || !payload.driver_id) return res.status(401).json({ error: 'Invalid driver token' });
+  req.driver = payload;
+  next();
+}
+
+// ── Driver Portal Auth ──
+app.post('/api/driver/login', async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+    if (!phone || !password) return res.status(400).json({ error: 'Phone and password required' });
+    const clean = phone.replace(/\D/g, '');
+    const result = await pool.query(
+      `SELECT * FROM drivers WHERE (phone = $1 OR phone = $2 OR phone = $3) AND password_hash IS NOT NULL`,
+      [clean, `1${clean}`, clean.replace(/^1/, '')]
+    );
+    const driver = result.rows[0];
+    if (!driver || driver.password_hash !== password) return res.status(401).json({ error: 'Invalid phone or password' });
+    const token = signToken({ driver_id: driver.id, company_id: driver.company_id, name: driver.name });
+    res.json({ token, driver });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Driver Portal: My Loads ──
+app.get('/api/driver/loads', driverAuthMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT l.*, c.company_name as customer_name
+       FROM loads l LEFT JOIN customers c ON c.id = l.customer_id
+       WHERE l.driver_id = $1 AND l.status NOT IN ('PAID')
+       ORDER BY l.pickup_date ASC NULLS LAST, l.created_at DESC`,
+      [req.driver.driver_id]
+    );
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Driver Portal: Update Load Status ──
+app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { status, pod_url } = req.body;
+    const allowed = ['IN_TRANSIT', 'DELIVERED'];
+    if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const updates = { status };
+    if (status === 'DELIVERED') updates.delivered_at = new Date().toISOString();
+    if (pod_url) updates.pod_url = pod_url;
+    const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 3}`).join(', ');
+    const result = await pool.query(
+      `UPDATE loads SET ${sets} WHERE id = $1 AND driver_id = $2 RETURNING *`,
+      [req.params.id, req.driver.driver_id, ...Object.values(updates)]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Load not found' });
+    // On delivery: check auto_invoicing setting
+    if (status === 'DELIVERED') {
+      const load = result.rows[0];
+      const company = await pool.query('SELECT * FROM companies WHERE id = $1', [load.company_id]);
+      const comp = company.rows[0];
+      if (comp.auto_invoicing !== false) {
+        // Auto mode: create invoice + move to INVOICED
+        const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
+        await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [load.company_id]);
+        const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0);
+        await pool.query(
+          'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+          [load.company_id, load.id, invNum, total]
+        );
+        await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1`, [load.id]);
+      } else {
+        // Manual mode: move to WAITING_INVOICING
+        await pool.query(`UPDATE loads SET status = 'WAITING_INVOICING' WHERE id = $1`, [load.id]);
+      }
+      // Mirror to driver Supabase
+      try {
+        const { createClient } = await import('@supabase/supabase-js');
+        const driverSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+        await driverSupabase.from('loads').update({ status: 'DELIVERED', delivered_at: updates.delivered_at }).eq('id', load.id);
+      } catch (_) {}
+    }
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Auth ──
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -354,6 +440,46 @@ app.post('/api/loads/:id/status', async (req, res) => {
     }
 
     res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Settings ──
+app.get('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT auto_invoicing FROM companies WHERE id = $1', [req.user.company_id]);
+    res.json(r.rows[0] || { auto_invoicing: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const { auto_invoicing } = req.body;
+    const r = await pool.query(
+      'UPDATE companies SET auto_invoicing = $1 WHERE id = $2 RETURNING auto_invoicing',
+      [auto_invoicing, req.user.company_id]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Manual invoice creation for WAITING_INVOICING loads ──
+app.post('/api/loads/:id/invoice', authMiddleware, async (req, res) => {
+  try {
+    const lr = await pool.query('SELECT * FROM loads WHERE id = $1 AND company_id = $2', [req.params.id, req.user.company_id]);
+    const load = lr.rows[0];
+    if (!load) return res.status(404).json({ error: 'Load not found' });
+    if (load.status !== 'WAITING_INVOICING') return res.status(400).json({ error: 'Load is not waiting on invoicing' });
+    const cr = await pool.query('SELECT * FROM companies WHERE id = $1', [req.user.company_id]);
+    const comp = cr.rows[0];
+    const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
+    await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [req.user.company_id]);
+    const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0);
+    await pool.query(
+      'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+      [req.user.company_id, load.id, invNum, total]
+    );
+    await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1`, [load.id]);
+    res.json({ success: true, invoice_number: invNum });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

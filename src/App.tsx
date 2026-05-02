@@ -9,8 +9,9 @@ import CustomersView from './screens/CustomersView';
 import InvoicesView from './screens/InvoicesView';
 import ShippersView from './screens/ShippersView';
 import EmployeesView from './screens/EmployeesView';
+import SettingsView from './screens/SettingsView';
 
-type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees';
+type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees' | 'settings';
 
 function Inner() {
   const { user, loading } = useAuth();
@@ -40,6 +41,7 @@ function Inner() {
       {tab === 'invoices' && <InvoicesView />}
       {tab === 'shippers' && <ShippersView />}
       {tab === 'employees' && <EmployeesView />}
+      {tab === 'settings' && <SettingsView />}
     </AppLayout>
   );
 }
