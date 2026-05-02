@@ -322,7 +322,10 @@ app.post('/api/invoices/:id/send', authMiddleware, async (req, res) => {
 // ── Onboarding (public) ──
 app.post('/api/onboard', async (req, res) => {
   try {
-    const { company_name, email, password, name, phone, address, city, state } = req.body;
+    const { company_name, company_email, company_phone, admin_email, admin_name, password } = req.body;
+    const email = admin_email;
+    const name = admin_name;
+    const phone = company_phone;
     if (!company_name || !email || !password || !name) return res.status(400).json({ error: 'Missing required fields' });
 
     const comp = await pool.query(
