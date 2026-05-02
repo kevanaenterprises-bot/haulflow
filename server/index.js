@@ -116,9 +116,17 @@ app.post('/api/driver/loads/:id/pod', driverAuthMiddleware, async (req, res) => 
     }
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    // Ensure bucket exists (creates it if not — idempotent)
+    const { error: bucketErr } = await supabase.storage.createBucket('pod-documents', { public: true });
+    if (bucketErr && !bucketErr.message.includes('already exists')) {
+      console.error('[POD Upload] Bucket create error:', bucketErr.message);
+    }
     const buffer = Buffer.from(image_base64, 'base64');
-    const ext = (mime_type || 'image/jpeg').split('/')[1] || 'jpg';
-    const filePath = `${req.params.id}/${Date.now()}.${ext}`;
+    const rawExt = (mime_type || 'image/jpeg').split('/')[1] || 'jpg';
+    // Normalize extension — some phones send heic/heif, Supabase accepts any but we standardize
+    const ext = rawExt.replace('jpeg', 'jpg');
+    const filePath = `pod_${req.params.id}_${Date.now()}.${ext}`;
+    console.log('[POD Upload] Uploading', filePath, 'size:', buffer.length, 'mime:', mime_type);
     const { error: uploadError } = await supabase.storage
       .from('pod-documents')
       .upload(filePath, buffer, { contentType: mime_type || 'image/jpeg', upsert: true });
