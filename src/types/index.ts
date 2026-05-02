@@ -35,7 +35,38 @@ export interface Driver {
   email?: string;
   license_number?: string;
   license_expiry?: string;
+  medical_card_expiry?: string;
+  hire_date?: string;
+  termination_date?: string;
+  cdl_file_url?: string;
+  medical_card_file_url?: string;
   status: 'available' | 'on_route' | 'off_duty';
+}
+
+export interface Employee {
+  id: string;
+  company_id: string;
+  name: string;
+  email: string;
+  role: string;
+  job_title?: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface Shipper {
+  id: string;
+  company_id: string;
+  type: 'shipper' | 'receiver' | 'both';
+  name: string;
+  contact_name?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  notes?: string;
 }
 
 export interface Customer {

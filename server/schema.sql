@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
   role VARCHAR(50) DEFAULT 'admin',
+  job_title VARCHAR(100),
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -40,6 +41,11 @@ CREATE TABLE IF NOT EXISTS drivers (
   email VARCHAR(255),
   license_number VARCHAR(100),
   license_expiry DATE,
+  medical_card_expiry DATE,
+  hire_date DATE,
+  termination_date DATE,
+  cdl_file_url TEXT,
+  medical_card_file_url TEXT,
   status VARCHAR(50) DEFAULT 'available',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -54,6 +60,22 @@ CREATE TABLE IF NOT EXISTS customers (
   address TEXT,
   city VARCHAR(100),
   state VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS shippers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  type VARCHAR(20) DEFAULT 'shipper',
+  name VARCHAR(255) NOT NULL,
+  contact_name VARCHAR(255),
+  phone VARCHAR(50),
+  email VARCHAR(255),
+  address TEXT,
+  city VARCHAR(100),
+  state VARCHAR(50),
+  zip VARCHAR(20),
+  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -103,8 +125,31 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Add new columns to existing tables if they don't exist
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='medical_card_expiry') THEN
+    ALTER TABLE drivers ADD COLUMN medical_card_expiry DATE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='hire_date') THEN
+    ALTER TABLE drivers ADD COLUMN hire_date DATE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='termination_date') THEN
+    ALTER TABLE drivers ADD COLUMN termination_date DATE;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='cdl_file_url') THEN
+    ALTER TABLE drivers ADD COLUMN cdl_file_url TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='medical_card_file_url') THEN
+    ALTER TABLE drivers ADD COLUMN medical_card_file_url TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='job_title') THEN
+    ALTER TABLE users ADD COLUMN job_title VARCHAR(100);
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_loads_company ON loads(company_id);
 CREATE INDEX IF NOT EXISTS idx_loads_status ON loads(company_id, status);
 CREATE INDEX IF NOT EXISTS idx_drivers_company ON drivers(company_id);
 CREATE INDEX IF NOT EXISTS idx_customers_company ON customers(company_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_company ON invoices(company_id);
+CREATE INDEX IF NOT EXISTS idx_shippers_company ON shippers(company_id);

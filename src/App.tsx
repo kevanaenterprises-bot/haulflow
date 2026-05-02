@@ -7,8 +7,10 @@ import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
 import CustomersView from './screens/CustomersView';
 import InvoicesView from './screens/InvoicesView';
+import ShippersView from './screens/ShippersView';
+import EmployeesView from './screens/EmployeesView';
 
-type Tab = 'loads' | 'drivers' | 'customers' | 'invoices';
+type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees';
 
 function Inner() {
   const { user, loading } = useAuth();
@@ -36,6 +38,8 @@ function Inner() {
       {tab === 'drivers' && <DriversView />}
       {tab === 'customers' && <CustomersView />}
       {tab === 'invoices' && <InvoicesView />}
+      {tab === 'shippers' && <ShippersView />}
+      {tab === 'employees' && <EmployeesView />}
     </AppLayout>
   );
 }

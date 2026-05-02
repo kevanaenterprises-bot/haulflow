@@ -146,11 +146,11 @@ app.get('/api/drivers', authMiddleware, async (req, res) => {
 
 app.post('/api/drivers', authMiddleware, async (req, res) => {
   try {
-    const { name, phone, email, license_number, license_expiry } = req.body;
+    const { name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, termination_date, cdl_file_url, medical_card_file_url } = req.body;
     if (!name) return res.status(400).json({ error: 'Name required' });
     const result = await pool.query(
-      'INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [req.user.company_id, name, phone || null, email || null, license_number || null, license_expiry || null]
+      'INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, termination_date, cdl_file_url, medical_card_file_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+      [req.user.company_id, name, phone || null, email || null, license_number || null, license_expiry || null, medical_card_expiry || null, hire_date || null, termination_date || null, cdl_file_url || null, medical_card_file_url || null]
     );
     res.json(result.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -204,6 +204,104 @@ app.patch('/api/customers/:id', authMiddleware, async (req, res) => {
       [req.params.id, ...fields.map(f => req.body[f]), req.user.company_id]
     );
     res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/customers/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM customers WHERE id = $1 AND company_id = $2', [req.params.id, req.user.company_id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Shippers & Receivers ──
+app.get('/api/shippers', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM shippers WHERE company_id = $1 ORDER BY name', [req.user.company_id]);
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/shippers', authMiddleware, async (req, res) => {
+  try {
+    const { type, name, contact_name, phone, email, address, city, state, zip, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    const result = await pool.query(
+      'INSERT INTO shippers (company_id, type, name, contact_name, phone, email, address, city, state, zip, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+      [req.user.company_id, type || 'shipper', name, contact_name || null, phone || null, email || null, address || null, city || null, state || null, zip || null, notes || null]
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/shippers/:id', authMiddleware, async (req, res) => {
+  try {
+    const fields = Object.keys(req.body);
+    const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
+    const result = await pool.query(
+      `UPDATE shippers SET ${sets} WHERE id = $1 AND company_id = $${fields.length + 2} RETURNING *`,
+      [req.params.id, ...fields.map(f => req.body[f]), req.user.company_id]
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/shippers/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM shippers WHERE id = $1 AND company_id = $2', [req.params.id, req.user.company_id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Employees (users management) ──
+app.get('/api/employees', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, email, role, job_title, is_active, created_at FROM users WHERE company_id = $1 ORDER BY name',
+      [req.user.company_id]
+    );
+    res.json(result.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/employees', authMiddleware, async (req, res) => {
+  try {
+    const { name, email, password, role, job_title } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password required' });
+    const result = await pool.query(
+      'INSERT INTO users (company_id, name, email, password_hash, role, job_title) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, email, role, job_title, is_active, created_at',
+      [req.user.company_id, name, email.toLowerCase().trim(), password, role || 'admin', job_title || null]
+    );
+    res.json(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Email already in use' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/api/employees/:id', authMiddleware, async (req, res) => {
+  try {
+    const { name, email, role, job_title, is_active, password } = req.body;
+    if (password) {
+      await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2 AND company_id = $3', [password, req.params.id, req.user.company_id]);
+    }
+    const result = await pool.query(
+      `UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role),
+       job_title = COALESCE($4, job_title), is_active = COALESCE($5, is_active)
+       WHERE id = $6 AND company_id = $7
+       RETURNING id, name, email, role, job_title, is_active, created_at`,
+      [name || null, email?.toLowerCase().trim() || null, role || null, job_title || null, is_active ?? null, req.params.id, req.user.company_id]
+    );
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/employees/:id', authMiddleware, async (req, res) => {
+  try {
+    // Prevent deleting yourself
+    if (req.params.id === req.user.id) return res.status(400).json({ error: 'Cannot delete your own account' });
+    await pool.query('DELETE FROM users WHERE id = $1 AND company_id = $2', [req.params.id, req.user.company_id]);
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

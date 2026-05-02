@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Truck, LayoutDashboard, Users, Building2, FileText, LogOut, Menu } from 'lucide-react';
+import { Truck, LayoutDashboard, Users, Building2, FileText, LogOut, Menu, PackageOpen, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
-type Tab = 'loads' | 'drivers' | 'customers' | 'invoices';
+type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees';
 
 interface AppLayoutProps {
   activeTab: Tab;
@@ -15,7 +15,9 @@ const nav = [
   { id: 'loads' as Tab, label: 'Loads', icon: LayoutDashboard },
   { id: 'drivers' as Tab, label: 'Drivers', icon: Users },
   { id: 'customers' as Tab, label: 'Customers', icon: Building2 },
+  { id: 'shippers' as Tab, label: 'Shippers & Receivers', icon: PackageOpen },
   { id: 'invoices' as Tab, label: 'Invoices', icon: FileText },
+  { id: 'employees' as Tab, label: 'Employees', icon: ShieldCheck },
 ];
 
 export default function AppLayout({ activeTab, onTabChange, children }: AppLayoutProps) {

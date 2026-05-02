@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, User, Phone, Mail, Edit2, Trash2 } from 'lucide-react';
+import { Plus, User, Phone, Mail, Edit2, Trash2, Upload, FileText } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Driver } from '../types';
 import { cn } from '../lib/utils';
@@ -27,6 +27,13 @@ export default function DriversView() {
     available: 'bg-green-100 text-green-700',
     on_route: 'bg-blue-100 text-blue-700',
     off_duty: 'bg-gray-100 text-gray-500',
+  };
+
+  const isExpiringSoon = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    const diff = (d.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return diff < 60;
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
@@ -61,7 +68,34 @@ export default function DriversView() {
             </div>
             {d.phone && <div className="flex items-center gap-2 text-sm text-gray-500"><Phone className="w-3.5 h-3.5" />{d.phone}</div>}
             {d.email && <div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><Mail className="w-3.5 h-3.5" />{d.email}</div>}
-            {d.license_expiry && <div className="text-xs text-gray-400 mt-2">CDL expires: {d.license_expiry}</div>}
+            <div className="mt-2 space-y-1">
+              {d.license_expiry && (
+                <div className={cn('text-xs', isExpiringSoon(d.license_expiry) ? 'text-red-600 font-semibold' : 'text-gray-400')}>
+                  CDL expires: {d.license_expiry}{isExpiringSoon(d.license_expiry) ? ' ⚠️' : ''}
+                </div>
+              )}
+              {d.medical_card_expiry && (
+                <div className={cn('text-xs', isExpiringSoon(d.medical_card_expiry) ? 'text-red-600 font-semibold' : 'text-gray-400')}>
+                  Medical expires: {d.medical_card_expiry}{isExpiringSoon(d.medical_card_expiry) ? ' ⚠️' : ''}
+                </div>
+              )}
+              {d.hire_date && <div className="text-xs text-gray-400">Hired: {d.hire_date}</div>}
+              {d.termination_date && <div className="text-xs text-red-400">Terminated: {d.termination_date}</div>}
+            </div>
+            <div className="flex gap-2 mt-3">
+              {d.cdl_file_url && (
+                <a href={d.cdl_file_url} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
+                  <FileText className="w-3 h-3" /> CDL
+                </a>
+              )}
+              {d.medical_card_file_url && (
+                <a href={d.medical_card_file_url} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
+                  <FileText className="w-3 h-3" /> Medical Card
+                </a>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -71,8 +105,34 @@ export default function DriversView() {
   );
 }
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+async function uploadFile(file: File, path: string): Promise<string> {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-docs/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${SUPABASE_KEY}`, 'x-upsert': 'true' },
+    body: file,
+  });
+  if (!res.ok) throw new Error('File upload failed');
+  return `${SUPABASE_URL}/storage/v1/object/public/driver-docs/${path}`;
+}
+
 function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: driver?.name || '', phone: driver?.phone || '', email: driver?.email || '', license_number: driver?.license_number || '', license_expiry: driver?.license_expiry || '' });
+  const [form, setForm] = useState({
+    name: driver?.name || '',
+    phone: driver?.phone || '',
+    email: driver?.email || '',
+    license_number: driver?.license_number || '',
+    license_expiry: driver?.license_expiry || '',
+    medical_card_expiry: driver?.medical_card_expiry || '',
+    hire_date: driver?.hire_date || '',
+    termination_date: driver?.termination_date || '',
+    cdl_file_url: driver?.cdl_file_url || '',
+    medical_card_file_url: driver?.medical_card_file_url || '',
+  });
+  const [cdlFile, setCdlFile] = useState<File | null>(null);
+  const [medFile, setMedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const set = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }));
@@ -81,25 +141,71 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
     e.preventDefault();
     setLoading(true);
     try {
-      if (driver) await api.patch(`/api/drivers/${driver.id}`, form);
-      else await api.post('/api/drivers', form);
+      const data = { ...form };
+      if (cdlFile && SUPABASE_URL) {
+        data.cdl_file_url = await uploadFile(cdlFile, `${Date.now()}-${cdlFile.name}`);
+      }
+      if (medFile && SUPABASE_URL) {
+        data.medical_card_file_url = await uploadFile(medFile, `${Date.now()}-${medFile.name}`);
+      }
+      if (driver) await api.patch(`/api/drivers/${driver.id}`, data);
+      else await api.post('/api/drivers', data);
       onSaved();
     } catch (err: any) { setError(err.message); }
     setLoading(false);
   };
 
+  const dateFields: [string, string][] = [
+    ['license_expiry', 'CDL Expiry'],
+    ['medical_card_expiry', 'Medical Card Expiry'],
+    ['hire_date', 'Hire Date'],
+    ['termination_date', 'Termination Date'],
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold mb-4">{driver ? 'Edit Driver' : 'Add Driver'}</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {[['name','Name *'],['phone','Phone'],['email','Email'],['license_number','CDL Number'],['license_expiry','CDL Expiry']].map(([f, l]) => (
+          {[['name','Name *'],['phone','Phone'],['email','Email'],['license_number','CDL Number']].map(([f, l]) => (
             <div key={f}>
               <label className="block text-sm font-medium text-gray-700 mb-1">{l}</label>
-              <input type={f === 'license_expiry' ? 'date' : 'text'} value={(form as any)[f]} onChange={e => set(f, e.target.value)}
+              <input type="text" value={(form as any)[f]} onChange={e => set(f, e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
           ))}
+
+          <div className="grid grid-cols-2 gap-3">
+            {dateFields.map(([f, l]) => (
+              <div key={f}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{l}</label>
+                <input type="date" value={(form as any)[f]} onChange={e => set(f, e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+              </div>
+            ))}
+          </div>
+
+          {/* File uploads */}
+          <div className="border-t pt-3 space-y-3">
+            <p className="text-sm font-semibold text-gray-700">Document Uploads</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">CDL File (PDF/Image)</label>
+              <label className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 text-sm text-gray-500">
+                <Upload className="w-4 h-4" />
+                {cdlFile ? cdlFile.name : (form.cdl_file_url ? 'Replace CDL file' : 'Upload CDL file')}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setCdlFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Medical Card (PDF/Image)</label>
+              <label className="flex items-center gap-2 cursor-pointer border border-dashed border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 text-sm text-gray-500">
+                <Upload className="w-4 h-4" />
+                {medFile ? medFile.name : (form.medical_card_file_url ? 'Replace medical card' : 'Upload medical card')}
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={e => setMedFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 border border-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
