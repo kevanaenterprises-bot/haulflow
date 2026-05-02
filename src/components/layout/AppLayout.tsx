@@ -24,14 +24,22 @@ const nav = [
 export default function AppLayout({ activeTab, onTabChange, children }: AppLayoutProps) {
   const { user, company, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className={cn(
-        'fixed inset-y-0 left-0 z-50 w-56 bg-brand-900 text-white flex flex-col transition-transform lg:translate-x-0 lg:static lg:z-auto',
-        mobileOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
+      <aside
+        onMouseEnter={() => setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 bg-brand-900 text-white flex flex-col transition-all duration-200 lg:static lg:z-auto',
+          // Mobile: slide in/out
+          mobileOpen ? 'translate-x-0 w-56' : '-translate-x-full w-56 lg:translate-x-0',
+          // Desktop: auto-hide — collapsed to 0 width rail, expands on hover
+          'lg:translate-x-0',
+          sidebarHovered ? 'lg:w-56' : 'lg:w-0 lg:overflow-hidden'
+        )}>
         <div className="flex items-center gap-2 px-4 py-5 border-b border-brand-700">
           <div className="bg-brand-500 p-1.5 rounded-lg">
             <Truck className="w-5 h-5" />
@@ -66,6 +74,12 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
           </button>
         </div>
       </aside>
+
+      {/* Desktop hover trigger strip — invisible 8px zone on far left */}
+      <div
+        className="hidden lg:block fixed inset-y-0 left-0 w-2 z-40"
+        onMouseEnter={() => setSidebarHovered(true)}
+      />
 
       {/* Mobile overlay */}
       {mobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />}
