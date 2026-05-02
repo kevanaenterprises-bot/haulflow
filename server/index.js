@@ -246,6 +246,8 @@ app.patch('/api/drivers/:id', authMiddleware, async (req, res) => {
   try {
     const body = { ...req.body };
     if (body.portal_password) { body.password_hash = body.portal_password; delete body.portal_password; }
+    // Convert empty strings to null (date fields etc.)
+    for (const k of Object.keys(body)) { if (body[k] === '') body[k] = null; }
     const fields = Object.keys(body);
     const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
     const result = await pool.query(
