@@ -130,6 +130,7 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
     termination_date: driver?.termination_date || '',
     cdl_file_url: driver?.cdl_file_url || '',
     medical_card_file_url: driver?.medical_card_file_url || '',
+    portal_password: '',
   });
   const [cdlFile, setCdlFile] = useState<File | null>(null);
   const [medFile, setMedFile] = useState<File | null>(null);
@@ -141,7 +142,8 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
     e.preventDefault();
     setLoading(true);
     try {
-      const data = { ...form };
+      const data: any = { ...form };
+      if (!data.portal_password) delete data.portal_password;
       if (cdlFile && SUPABASE_URL) {
         data.cdl_file_url = await uploadFile(cdlFile, `${Date.now()}-${cdlFile.name}`);
       }
@@ -167,7 +169,7 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold mb-4">{driver ? 'Edit Driver' : 'Add Driver'}</h2>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {[['name','Name *'],['phone','Phone'],['email','Email'],['license_number','CDL Number']].map(([f, l]) => (
+          {[['name','Name *'],['phone','Phone (used to log into driver portal)'],['email','Email'],['license_number','CDL Number']].map(([f, l]) => (
             <div key={f}>
               <label className="block text-sm font-medium text-gray-700 mb-1">{l}</label>
               <input type="text" value={(form as any)[f]} onChange={e => set(f, e.target.value)}
@@ -183,6 +185,21 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
             ))}
+          </div>
+
+          {/* Driver portal password */}
+          <div className="border-t pt-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Driver Portal Password {driver ? '(leave blank to keep current)' : ''}
+            </label>
+            <input
+              type="password"
+              value={form.portal_password}
+              onChange={e => set('portal_password', e.target.value)}
+              placeholder={driver ? '••••••••' : 'Set a password for driver app login'}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Driver logs in at haulflow.vercel.app/driver using their phone number + this password.</p>
           </div>
 
           {/* File uploads */}

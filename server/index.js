@@ -232,11 +232,11 @@ app.get('/api/drivers', authMiddleware, async (req, res) => {
 
 app.post('/api/drivers', authMiddleware, async (req, res) => {
   try {
-    const { name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, termination_date, cdl_file_url, medical_card_file_url } = req.body;
+    const { name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, termination_date, cdl_file_url, medical_card_file_url, portal_password } = req.body;
     if (!name) return res.status(400).json({ error: 'Name required' });
     const result = await pool.query(
-      'INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, termination_date, cdl_file_url, medical_card_file_url) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
-      [req.user.company_id, name, phone || null, email || null, license_number || null, license_expiry || null, medical_card_expiry || null, hire_date || null, termination_date || null, cdl_file_url || null, medical_card_file_url || null]
+      'INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, termination_date, cdl_file_url, medical_card_file_url, password_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',
+      [req.user.company_id, name, phone || null, email || null, license_number || null, license_expiry || null, medical_card_expiry || null, hire_date || null, termination_date || null, cdl_file_url || null, medical_card_file_url || null, portal_password || null]
     );
     res.json(result.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -244,11 +244,13 @@ app.post('/api/drivers', authMiddleware, async (req, res) => {
 
 app.patch('/api/drivers/:id', authMiddleware, async (req, res) => {
   try {
-    const fields = Object.keys(req.body);
+    const body = { ...req.body };
+    if (body.portal_password) { body.password_hash = body.portal_password; delete body.portal_password; }
+    const fields = Object.keys(body);
     const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
     const result = await pool.query(
       `UPDATE drivers SET ${sets} WHERE id = $1 AND company_id = $${fields.length + 2} RETURNING *`,
-      [req.params.id, ...fields.map(f => req.body[f]), req.user.company_id]
+      [req.params.id, ...fields.map(f => body[f]), req.user.company_id]
     );
     res.json(result.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
