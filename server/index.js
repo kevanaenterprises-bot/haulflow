@@ -802,12 +802,24 @@ async function sendInvoiceEmail(invoiceId, companyId) {
      WHERE i.id = $1 AND i.company_id = $2`,
     [invoiceId, companyId]
   );
-  if (!invRes.rows.length) return;
+  if (!invRes.rows.length) { console.log('[Email] Invoice not found:', invoiceId); return; }
   const inv = invRes.rows[0];
-  if (!inv.customer_email) return; // no email on file, skip silently
+  if (!inv.customer_email) { console.log('[Email] No customer email for invoice:', inv.invoice_number); return; }
   const compRes = await pool.query('SELECT * FROM companies WHERE id = $1', [companyId]);
   const comp = compRes.rows[0];
-  const podImageBuffers = await fetchPodImages(inv.load_id);
+  // Fetch POD: check loads.pod_url first (HaulFlow driver portal), then fall back to Supabase pod_documents
+  const podImageBuffers = [];
+  if (inv.pod_url) {
+    try {
+      const r = await fetch(inv.pod_url);
+      if (r.ok) { const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 0) podImageBuffers.push(buf); }
+    } catch {}
+  }
+  if (!podImageBuffers.length) {
+    const supabasePods = await fetchPodImages(inv.load_id);
+    podImageBuffers.push(...supabasePods);
+  }
+  console.log(`[Email] Sending invoice ${inv.invoice_number} to ${inv.customer_email}, POD images: ${podImageBuffers.length}`);
   const pdfBuffer = await buildInvoicePDF({ inv, comp, podImageBuffers });
   await sendEmail({
     to: inv.customer_email,
@@ -820,7 +832,8 @@ async function sendInvoiceEmail(invoiceId, companyId) {
 async function sendEmail({ to, subject, html, attachments = [] }) {
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@haulflow.app';
-  if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not set');
+  if (!RESEND_API_KEY) { console.error('[Email] RESEND_API_KEY not set — email not sent'); throw new Error('RESEND_API_KEY not set'); }
+  console.log(`[Email] Sending to ${to} from ${FROM_EMAIL}`);
   const body = { from: FROM_EMAIL, to: [to], subject, html };
   if (attachments.length) {
     body.attachments = attachments.map(a => ({ filename: a.filename, content: a.content.toString('base64') }));
@@ -830,7 +843,9 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`Resend error: ${await r.text()}`);
+  const responseText = await r.text();
+  if (!r.ok) { console.error('[Email] Resend error:', responseText); throw new Error(`Resend error: ${responseText}`); }
+  console.log('[Email] Sent successfully:', responseText);
 }
 
 // Serve frontend
