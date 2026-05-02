@@ -38,10 +38,6 @@ function Inner() {
   const { user, loading } = useAuth();
   const [tab, setTab] = useState<Tab>('loads');
 
-  if (window.location.pathname === '/driver') {
-    return <DriverPortal />;
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -72,6 +68,11 @@ function Inner() {
 }
 
 export default function App() {
+  // Detect driver portal before auth context loads — avoids any admin auth interference
+  if (window.location.pathname.startsWith('/driver')) {
+    return <DriverPortal />;
+  }
+
   return (
     <AuthProvider>
       <Inner />
