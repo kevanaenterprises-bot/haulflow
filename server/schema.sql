@@ -273,6 +273,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='miles_driven') THEN
     ALTER TABLE loads ADD COLUMN miles_driven DECIMAL(10,3) DEFAULT 0;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='mc_number') THEN
+    ALTER TABLE companies ADD COLUMN mc_number VARCHAR(50);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='dot_number') THEN
+    ALTER TABLE companies ADD COLUMN dot_number VARCHAR(50);
+  END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_gps_events_driver ON gps_events(driver_id, recorded_at);

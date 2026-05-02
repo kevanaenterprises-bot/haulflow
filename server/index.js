@@ -859,24 +859,59 @@ app.get('/api/reports/ar-aging', authMiddleware, async (req, res) => {
 // ── Onboarding (public) ──
 app.post('/api/onboard', async (req, res) => {
   try {
-    const { company_name, company_email, company_phone, admin_email, admin_name, password } = req.body;
+    const { company_name, company_email, company_phone, mc_number, dot_number, admin_email, admin_name, password } = req.body;
     const email = admin_email;
     const name = admin_name;
-    const phone = company_phone;
     if (!company_name || !email || !password || !name) return res.status(400).json({ error: 'Missing required fields' });
 
     const comp = await pool.query(
-      'INSERT INTO companies (name, email, phone, address, city, state) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [company_name, company_email || email, phone || null, null, null, null]
+      `INSERT INTO companies (name, email, phone, mc_number, dot_number)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [company_name, company_email || email, company_phone || null, mc_number || null, dot_number || null]
     );
     const user = await pool.query(
       'INSERT INTO users (company_id, email, password_hash, name, role) VALUES ($1,$2,$3,$4,$5) RETURNING *',
       [comp.rows[0].id, email.toLowerCase().trim(), password, name, 'admin']
     );
     const token = signToken({ id: user.rows[0].id, company_id: comp.rows[0].id, role: 'admin' });
-    res.json({ token, user: user.rows[0], company: comp.rows[0] });
+
+    // Welcome email — fire and forget, don't fail signup if email fails
+    sendEmail({
+      to: email,
+      subject: 'Welcome to HaulFlow — Your account is ready',
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+          <div style="background:#1d4ed8;padding:32px;border-radius:12px 12px 0 0;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:28px">🚛 Welcome to HaulFlow</h1>
+          </div>
+          <div style="background:#fff;padding:32px;border:1px solid #e5e7eb;border-radius:0 0 12px 12px">
+            <p style="font-size:16px;color:#111">Hi ${name},</p>
+            <p style="color:#374151">Your HaulFlow account for <strong>${company_name}</strong> is ready to go.</p>
+            <p style="color:#374151">You're on a <strong>14-day free trial</strong> — no credit card needed yet. Here's how to get started:</p>
+            <ol style="color:#374151;line-height:2">
+              <li>Add your first driver</li>
+              <li>Add a customer or shipper</li>
+              <li>Create your first load and dispatch it</li>
+            </ol>
+            <div style="text-align:center;margin:28px 0">
+              <a href="https://haulflow.vercel.app" style="background:#1d4ed8;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px">
+                Open HaulFlow →
+              </a>
+            </div>
+            <p style="color:#6b7280;font-size:13px">Questions? Reply to this email and we'll get back to you fast.</p>
+            <p style="color:#6b7280;font-size:13px">— The HaulFlow Team</p>
+          </div>
+        </div>
+      `,
+    }).catch(err => console.error('[Onboard] Welcome email failed:', err.message));
+
+    res.json({
+      token,
+      user: { id: user.rows[0].id, company_id: comp.rows[0].id, email: user.rows[0].email, name: user.rows[0].name, role: 'admin' },
+      company: { id: comp.rows[0].id, name: comp.rows[0].name, invoice_prefix: comp.rows[0].invoice_prefix, subscription_status: comp.rows[0].subscription_status },
+    });
   } catch (e) {
-    if (e.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+    if (e.code === '23505') return res.status(409).json({ error: 'An account with that email already exists.' });
     res.status(500).json({ error: e.message });
   }
 });
