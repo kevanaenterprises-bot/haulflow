@@ -114,27 +114,27 @@ app.post('/api/driver/loads/:id/pod', driverAuthMiddleware, async (req, res) => 
       console.error('[POD Upload] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY env vars');
       return res.status(500).json({ error: 'Storage not configured on server' });
     }
+    console.log('[POD Upload] SUPABASE_URL:', SUPABASE_URL ? SUPABASE_URL.substring(0, 30) + '...' : 'MISSING');
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    // Ensure bucket exists (creates it if not — idempotent)
-    const { error: bucketErr } = await supabase.storage.createBucket('pod-documents', { public: true });
-    if (bucketErr && !bucketErr.message.includes('already exists')) {
-      console.error('[POD Upload] Bucket create error:', bucketErr.message);
-    }
+    // Try to create bucket — log full error regardless
+    const { error: bucketErr } = await supabase.storage.createBucket('haulflow-pods', { public: true });
+    if (bucketErr) console.log('[POD Upload] Bucket create result:', bucketErr.message);
+    else console.log('[POD Upload] Bucket created successfully');
     const buffer = Buffer.from(image_base64, 'base64');
     const rawExt = (mime_type || 'image/jpeg').split('/')[1] || 'jpg';
-    // Normalize extension — some phones send heic/heif, Supabase accepts any but we standardize
-    const ext = rawExt.replace('jpeg', 'jpg');
-    const filePath = `pod_${req.params.id}_${Date.now()}.${ext}`;
+    const ext = rawExt === 'jpeg' ? 'jpg' : rawExt;
+    const filePath = `pod_${Date.now()}.${ext}`;
     console.log('[POD Upload] Uploading', filePath, 'size:', buffer.length, 'mime:', mime_type);
-    const { error: uploadError } = await supabase.storage
-      .from('pod-documents')
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('haulflow-pods')
       .upload(filePath, buffer, { contentType: mime_type || 'image/jpeg', upsert: true });
     if (uploadError) {
-      console.error('[POD Upload] Supabase error:', uploadError.message);
+      console.error('[POD Upload] Upload error:', JSON.stringify(uploadError));
       return res.status(500).json({ error: 'Upload failed: ' + uploadError.message });
     }
-    const { data: urlData } = supabase.storage.from('pod-documents').getPublicUrl(filePath);
+    console.log('[POD Upload] Upload data:', JSON.stringify(uploadData));
+    const { data: urlData } = supabase.storage.from('haulflow-pods').getPublicUrl(filePath);
     const pod_url = urlData.publicUrl;
     console.log('[POD Upload] Success:', pod_url);
     res.json({ pod_url });
