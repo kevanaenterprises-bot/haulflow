@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Truck, CheckCircle } from 'lucide-react';
+import { api } from '../lib/api';
 
 export default function OnboardingPage() {
   const [form, setForm] = useState({
@@ -19,20 +20,14 @@ export default function OnboardingPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/onboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_name: form.company_name,
-          company_email: form.company_email,
-          company_phone: form.company_phone,
-          admin_name: form.admin_name,
-          admin_email: form.admin_email,
-          password: form.password,
-        }),
+      await api.post('/api/onboard', {
+        company_name: form.company_name,
+        company_email: form.company_email,
+        company_phone: form.company_phone,
+        admin_name: form.admin_name,
+        admin_email: form.admin_email,
+        password: form.password,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create account');
       setDone(true);
     } catch (err: any) {
       setError(err.message);
