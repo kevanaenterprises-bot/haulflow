@@ -103,6 +103,36 @@ app.get('/api/driver/loads', driverAuthMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Driver Portal: Upload POD via server (avoids anon key storage permissions) ──
+app.post('/api/driver/loads/:id/pod', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { image_base64, mime_type } = req.body;
+    if (!image_base64) return res.status(400).json({ error: 'No image provided' });
+    const SUPABASE_URL = process.env.SUPABASE_URL;
+    const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Storage not configured' });
+    const buffer = Buffer.from(image_base64, 'base64');
+    const path = `pod/${req.params.id}-${Date.now()}.jpg`;
+    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-docs/${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'x-upsert': 'true',
+        'Content-Type': mime_type || 'image/jpeg',
+      },
+      body: buffer,
+    });
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text();
+      console.error('[POD Upload] Supabase error:', err);
+      return res.status(500).json({ error: 'Upload failed: ' + err });
+    }
+    const pod_url = `${SUPABASE_URL}/storage/v1/object/public/driver-docs/${path}`;
+    console.log('[POD Upload] Success:', pod_url);
+    res.json({ pod_url });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Driver Portal: Update Load Status ──
 app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res) => {
   try {

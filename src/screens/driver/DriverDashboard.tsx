@@ -165,9 +165,6 @@ function LoadDetail({ load, onBack, onUpdated }: { load: any; onBack: () => void
   const [podPreview, setPodPreview] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
-  const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -176,15 +173,22 @@ function LoadDetail({ load, onBack, onUpdated }: { load: any; onBack: () => void
   };
 
   const uploadPod = async (): Promise<string | null> => {
-    if (!podFile || !SUPABASE_URL) return null;
-    const path = `pod/${load.id}-${Date.now()}.jpg`;
-    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-docs/${path}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${SUPABASE_KEY}`, 'x-upsert': 'true', 'Content-Type': podFile.type },
-      body: podFile,
+    if (!podFile) return null;
+    // Convert file to base64 and upload via server (server uses service key for Supabase)
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]); // strip data:image/jpeg;base64, prefix
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(podFile);
     });
-    if (!res.ok) return null;
-    return `${SUPABASE_URL}/storage/v1/object/public/driver-docs/${path}`;
+    const data = await driverApi(`/api/driver/loads/${load.id}/pod`, 'POST', {
+      image_base64: base64,
+      mime_type: podFile.type,
+    });
+    return data.pod_url || null;
   };
 
   const handleAccept = async () => {
@@ -203,6 +207,7 @@ function LoadDetail({ load, onBack, onUpdated }: { load: any; onBack: () => void
     setError('');
     try {
       const pod_url = await uploadPod();
+      if (!pod_url) { setError('Photo upload failed — please try again'); setUpdating(false); return; }
       const updated = await driverApi(`/api/driver/loads/${load.id}/status`, 'PATCH', { status: 'DELIVERED', pod_url });
       onUpdated(updated);
     } catch (err: any) { setError(err.message); }
