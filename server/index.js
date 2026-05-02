@@ -247,6 +247,38 @@ app.patch('/api/driver/loads/:id/fields', driverAuthMiddleware, async (req, res)
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Driver Portal: Fuel Purchases ──
+app.get('/api/driver/fuel', driverAuthMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM fuel_purchases WHERE driver_id = $1 ORDER BY purchase_date DESC, created_at DESC LIMIT 50`,
+      [req.driver.driver_id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/driver/fuel', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { load_id, truck_unit, purchase_date, state, gallons, price_per_gallon, total_amount, notes } = req.body;
+    if (!state || !gallons || !total_amount) return res.status(400).json({ error: 'State, gallons, and total amount are required' });
+    const r = await pool.query(
+      `INSERT INTO fuel_purchases (company_id, driver_id, load_id, truck_unit, purchase_date, state, gallons, price_per_gallon, total_amount, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [req.driver.company_id, req.driver.driver_id, load_id || null, truck_unit || null,
+       purchase_date || new Date().toISOString().slice(0,10), state, gallons, price_per_gallon || null, total_amount, notes || null]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/driver/fuel/:id', driverAuthMiddleware, async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM fuel_purchases WHERE id = $1 AND driver_id = $2`, [req.params.id, req.driver.driver_id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Auth ──
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -271,10 +303,12 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/loads', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT l.*, d.name as driver_name, d.phone as driver_phone, c.company_name as customer_name
+      `SELECT l.*, d.name as driver_name, d.phone as driver_phone, c.company_name as customer_name,
+              i.invoice_number, i.id as invoice_id
        FROM loads l
        LEFT JOIN drivers d ON d.id = l.driver_id
        LEFT JOIN customers c ON c.id = l.customer_id
+       LEFT JOIN invoices i ON i.load_id = l.id
        WHERE l.company_id = $1
        ORDER BY l.created_at DESC`,
       [req.user.company_id]
@@ -615,6 +649,22 @@ app.patch('/api/invoices/:id/pay', authMiddleware, async (req, res) => {
     if (result.rows[0]) {
       await pool.query(`UPDATE loads SET status = 'PAID' WHERE id = $1`, [result.rows[0].load_id]);
     }
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Edit invoice number (before paid) ──
+app.patch('/api/invoices/by-load/:loadId/number', authMiddleware, async (req, res) => {
+  try {
+    const { invoice_number } = req.body;
+    if (!invoice_number?.trim()) return res.status(400).json({ error: 'Invoice number required' });
+    const result = await pool.query(
+      `UPDATE invoices SET invoice_number = $1
+       WHERE load_id = $2 AND company_id = $3 AND status = 'UNPAID'
+       RETURNING *`,
+      [invoice_number.trim(), req.params.loadId, req.user.company_id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Invoice not found or already paid' });
     res.json(result.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

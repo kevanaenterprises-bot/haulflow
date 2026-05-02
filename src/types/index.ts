@@ -114,6 +114,8 @@ export interface Load {
   created_at?: string;
   driver_name?: string;
   customer_name?: string;
+  invoice_number?: string;
+  pod_url?: string;
 }
 
 export interface Invoice {

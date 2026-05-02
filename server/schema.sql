@@ -181,6 +181,23 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+CREATE TABLE IF NOT EXISTS fuel_purchases (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  driver_id UUID REFERENCES drivers(id) ON DELETE SET NULL,
+  load_id UUID REFERENCES loads(id) ON DELETE SET NULL,
+  truck_unit VARCHAR(100),
+  purchase_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  state VARCHAR(50) NOT NULL,
+  gallons DECIMAL(10,3) NOT NULL,
+  price_per_gallon DECIMAL(10,4),
+  total_amount DECIMAL(10,2) NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_fuel_purchases_company ON fuel_purchases(company_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_purchases_driver ON fuel_purchases(driver_id);
+
 CREATE INDEX IF NOT EXISTS idx_loads_company ON loads(company_id);
 CREATE INDEX IF NOT EXISTS idx_loads_status ON loads(company_id, status);
 CREATE INDEX IF NOT EXISTS idx_drivers_company ON drivers(company_id);

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   LogOut, Truck, Mic, ChevronRight, Calendar,
   Package, AlertTriangle, ArrowLeft, Camera, Upload, X, CheckCircle,
-  FileText, RotateCcw, Landmark, Radio,
+  FileText, RotateCcw, Landmark, Radio, Fuel, Plus, Trash2,
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '../../lib/utils';
 
@@ -27,7 +27,7 @@ interface Props {
   onLogout: () => void;
 }
 
-type View = 'dashboard' | 'detail';
+type View = 'dashboard' | 'detail' | 'fuel';
 
 export default function DriverDashboard({ driver, onLogout }: Props) {
   const [load, setLoad] = useState<any | null>(null);
@@ -355,11 +355,37 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
       {load && view === 'detail' && (
         <LoadDetail
           load={load}
-
           speak={speak}
           onBack={() => { setView('dashboard'); fetchLoad(); }}
           onDelivered={() => { setLoad(null); setView('dashboard'); }}
         />
+      )}
+
+      {/* Fuel log view */}
+      {view === 'fuel' && (
+        <FuelLog load={load} onBack={() => setView('dashboard')} />
+      )}
+
+      {/* Bottom nav — only on dashboard and fuel views */}
+      {view !== 'detail' && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 flex z-40">
+          <button
+            onClick={() => setView('dashboard')}
+            className={cn('flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition',
+              view === 'dashboard' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300')}
+          >
+            <Truck className="w-5 h-5" />
+            My Load
+          </button>
+          <button
+            onClick={() => setView('fuel')}
+            className={cn('flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition',
+              view === 'fuel' ? 'text-brand-400' : 'text-gray-500 hover:text-gray-300')}
+          >
+            <Fuel className="w-5 h-5" />
+            Fuel Log
+          </button>
+        </div>
       )}
 
       {/* Accept warning modal */}
@@ -697,6 +723,198 @@ function LoadDetail({
             <CheckCircle className={cn('w-4 h-4', podFiles.length > 0 ? 'text-green-400' : 'text-gray-600')} />
             POD photo attached ({podFiles.length})
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Fuel Log Screen
+// ─────────────────────────────────────────────
+const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+
+function FuelLog({ load }: { load: any | null; onBack?: () => void }) {
+  const [entries, setEntries] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    purchase_date: new Date().toISOString().slice(0, 10),
+    state: '',
+    gallons: '',
+    price_per_gallon: '',
+    total_amount: '',
+    truck_unit: '',
+    notes: '',
+  });
+
+  const fetchEntries = useCallback(async () => {
+    const data = await driverApi('/api/driver/fuel').catch(() => []);
+    setEntries(data);
+  }, []);
+
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
+
+  // Auto-calc total when gallons + price change
+  const updateForm = (field: string, value: string) => {
+    const updated = { ...form, [field]: value };
+    if ((field === 'gallons' || field === 'price_per_gallon') && updated.gallons && updated.price_per_gallon) {
+      const total = parseFloat(updated.gallons) * parseFloat(updated.price_per_gallon);
+      if (!isNaN(total)) updated.total_amount = total.toFixed(2);
+    }
+    setForm(updated);
+  };
+
+  const handleSave = async () => {
+    if (!form.state || !form.gallons || !form.total_amount) {
+      setError('State, gallons, and total amount are required');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await driverApi('/api/driver/fuel', 'POST', {
+        ...form,
+        load_id: load?.id || null,
+        gallons: parseFloat(form.gallons),
+        price_per_gallon: form.price_per_gallon ? parseFloat(form.price_per_gallon) : null,
+        total_amount: parseFloat(form.total_amount),
+      });
+      setForm({ purchase_date: new Date().toISOString().slice(0, 10), state: '', gallons: '', price_per_gallon: '', total_amount: '', truck_unit: '', notes: '' });
+      setShowForm(false);
+      fetchEntries();
+    } catch (e: any) { setError(e.message); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this fuel entry?')) return;
+    await driverApi(`/api/driver/fuel/${id}`, 'DELETE').catch(() => {});
+    fetchEntries();
+  };
+
+  const totalGallons = entries.reduce((s, e) => s + parseFloat(e.gallons || 0), 0);
+  const totalSpent = entries.reduce((s, e) => s + parseFloat(e.total_amount || 0), 0);
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white pb-24">
+      <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
+        <h1 className="text-xl font-bold">Fuel Log</h1>
+        <p className="text-gray-400 text-sm mt-0.5">Track fuel purchases for IFTA reporting</p>
+      </div>
+
+      <div className="px-4 py-4 space-y-4">
+        {/* Summary */}
+        {entries.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+              <p className="text-xs text-gray-500 mb-1">Total Gallons</p>
+              <p className="text-xl font-bold text-brand-400">{totalGallons.toFixed(1)}</p>
+            </div>
+            <div className="bg-gray-800 rounded-xl p-3 border border-gray-700">
+              <p className="text-xs text-gray-500 mb-1">Total Spent</p>
+              <p className="text-xl font-bold text-green-400">{formatCurrency(totalSpent)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Add entry button */}
+        <button
+          onClick={() => setShowForm(s => !s)}
+          className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 text-white py-3.5 rounded-xl font-bold transition"
+        >
+          <Plus className="w-5 h-5" />
+          {showForm ? 'Cancel' : 'Log Fuel Purchase'}
+        </button>
+
+        {/* Form */}
+        {showForm && (
+          <div className="bg-gray-800 rounded-2xl border border-gray-700 p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-300">New Fuel Entry</p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Date</label>
+                <input type="date" value={form.purchase_date} onChange={e => updateForm('purchase_date', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">State <span className="text-red-400">*</span></label>
+                <select value={form.state} onChange={e => updateForm('state', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500">
+                  <option value="">Select</option>
+                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Gallons <span className="text-red-400">*</span></label>
+                <input type="number" inputMode="decimal" placeholder="0.0" value={form.gallons} onChange={e => updateForm('gallons', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">$/Gallon</label>
+                <input type="number" inputMode="decimal" placeholder="0.00" value={form.price_per_gallon} onChange={e => updateForm('price_per_gallon', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Total $ <span className="text-red-400">*</span></label>
+                <input type="number" inputMode="decimal" placeholder="0.00" value={form.total_amount} onChange={e => updateForm('total_amount', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Truck Unit #</label>
+                <input type="text" placeholder="e.g. Truck 42" value={form.truck_unit} onChange={e => updateForm('truck_unit', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                <input type="text" placeholder="Optional" value={form.notes} onChange={e => updateForm('notes', e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-brand-500" />
+              </div>
+            </div>
+
+            {load && <p className="text-xs text-brand-400">📎 Will be linked to Load #{load.load_number}</p>}
+            {error && <p className="text-xs text-red-400">{error}</p>}
+
+            <button onClick={handleSave} disabled={saving}
+              className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold transition disabled:opacity-50">
+              {saving ? 'Saving...' : 'Save Fuel Entry'}
+            </button>
+          </div>
+        )}
+
+        {/* Entries list */}
+        {entries.length === 0 && !showForm && (
+          <div className="text-center py-12">
+            <Fuel className="w-12 h-12 mx-auto text-gray-700 mb-3" />
+            <p className="text-gray-500 text-sm">No fuel entries yet</p>
+          </div>
+        )}
+        <div className="space-y-2">
+          {entries.map((e: any) => (
+            <div key={e.id} className="bg-gray-800 rounded-xl border border-gray-700 p-3 flex items-start justify-between">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white">{e.gallons} gal</span>
+                  <span className="text-xs bg-brand-900/50 text-brand-300 px-2 py-0.5 rounded-full font-medium">{e.state}</span>
+                  {e.truck_unit && <span className="text-xs text-gray-500">{e.truck_unit}</span>}
+                </div>
+                <p className="text-sm font-semibold text-green-400">{formatCurrency(e.total_amount)}</p>
+                <p className="text-xs text-gray-500">{e.purchase_date?.slice(0, 10)}{e.price_per_gallon ? ` · $${parseFloat(e.price_per_gallon).toFixed(3)}/gal` : ''}</p>
+                {e.notes && <p className="text-xs text-gray-500 italic">{e.notes}</p>}
+              </div>
+              <button onClick={() => handleDelete(e.id)} className="p-1 text-gray-600 hover:text-red-400 transition">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>

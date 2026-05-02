@@ -196,6 +196,9 @@ function StatCard({ label, value, sub, icon: Icon, iconBg, iconColor }: { label:
 function LoadCard({ load, onAssign, onRefresh, onPreview }: { load: Load; onAssign: () => void; onRefresh: () => void; onPreview: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
+  const [editingInvNum, setEditingInvNum] = useState(false);
+  const [invNumDraft, setInvNumDraft] = useState('');
+  const [savingInvNum, setSavingInvNum] = useState(false);
 
   const handleDelete = async () => {
     if (!confirm(`Delete load #${load.load_number}?`)) return;
@@ -208,6 +211,22 @@ function LoadCard({ load, onAssign, onRefresh, onPreview }: { load: Load; onAssi
     setInvoicing(true);
     try { await api.post(`/api/loads/${load.id}/invoice`, {}); onRefresh(); }
     catch (e: any) { alert(e.message); setInvoicing(false); }
+  };
+
+  const startEditInvNum = (currentNum: string) => {
+    setInvNumDraft(currentNum);
+    setEditingInvNum(true);
+  };
+
+  const saveInvNum = async () => {
+    if (!invNumDraft.trim()) return;
+    setSavingInvNum(true);
+    try {
+      await api.patch(`/api/invoices/by-load/${load.id}/number`, { invoice_number: invNumDraft.trim() });
+      onRefresh();
+      setEditingInvNum(false);
+    } catch (e: any) { alert(e.message); }
+    setSavingInvNum(false);
   };
 
   return (
@@ -271,6 +290,36 @@ function LoadCard({ load, onAssign, onRefresh, onPreview }: { load: Load; onAssi
             <span className="text-sm font-bold text-emerald-600 ml-auto">{formatCurrency(load.rate)}</span>
           )}
         </div>
+
+        {/* Invoice number — visible on card for WAITING_INVOICING and INVOICED */}
+        {(load.status === 'WAITING_INVOICING' || load.status === 'INVOICED') && load.invoice_number && (
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <FileText className="w-3 h-3 text-gray-400 flex-shrink-0" />
+            {editingInvNum ? (
+              <div className="flex items-center gap-1 flex-1">
+                <input
+                  autoFocus
+                  value={invNumDraft}
+                  onChange={e => setInvNumDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveInvNum(); if (e.key === 'Escape') setEditingInvNum(false); }}
+                  className="flex-1 text-xs border border-brand-300 rounded px-1.5 py-0.5 font-mono focus:outline-none focus:ring-1 focus:ring-brand-400"
+                />
+                <button onClick={saveInvNum} disabled={savingInvNum} className="text-xs text-brand-600 font-semibold hover:text-brand-700">
+                  {savingInvNum ? '...' : 'Save'}
+                </button>
+                <button onClick={() => setEditingInvNum(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => load.status !== 'PAID' && startEditInvNum(load.invoice_number ?? '')}
+                className="text-xs font-mono text-brand-600 font-semibold hover:text-brand-700 hover:underline transition"
+                title="Click to edit invoice number"
+              >
+                {load.invoice_number}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Action buttons */}
         <div className="flex gap-2 pt-1">
