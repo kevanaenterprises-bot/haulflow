@@ -198,6 +198,88 @@ CREATE TABLE IF NOT EXISTS fuel_purchases (
 CREATE INDEX IF NOT EXISTS idx_fuel_purchases_company ON fuel_purchases(company_id);
 CREATE INDEX IF NOT EXISTS idx_fuel_purchases_driver ON fuel_purchases(driver_id);
 
+-- GPS & Geofencing tables
+CREATE TABLE IF NOT EXISTS gps_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
+  load_id UUID REFERENCES loads(id) ON DELETE SET NULL,
+  lat DECIMAL(10,7) NOT NULL,
+  lng DECIMAL(10,7) NOT NULL,
+  speed DECIMAL(6,2),
+  heading DECIMAL(5,2),
+  accuracy DECIMAL(8,2),
+  state VARCHAR(50),
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS geofence_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
+  load_id UUID REFERENCES loads(id) ON DELETE CASCADE,
+  stop_id VARCHAR(100),
+  stop_type VARCHAR(50),
+  event_type VARCHAR(20) NOT NULL, -- 'enter' or 'exit'
+  lat DECIMAL(10,7),
+  lng DECIMAL(10,7),
+  recorded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ifta_state_mileage (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
+  load_id UUID REFERENCES loads(id) ON DELETE SET NULL,
+  quarter VARCHAR(10) NOT NULL, -- e.g. '2026-Q1'
+  state VARCHAR(50) NOT NULL,
+  miles DECIMAL(10,3) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_id, driver_id, quarter, state)
+);
+
+-- Add GPS/geofence columns to existing tables
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='shipper_lat') THEN
+    ALTER TABLE loads ADD COLUMN shipper_lat DECIMAL(10,7);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='shipper_lng') THEN
+    ALTER TABLE loads ADD COLUMN shipper_lng DECIMAL(10,7);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='receiver_lat') THEN
+    ALTER TABLE loads ADD COLUMN receiver_lat DECIMAL(10,7);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='receiver_lng') THEN
+    ALTER TABLE loads ADD COLUMN receiver_lng DECIMAL(10,7);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='geofence_radius') THEN
+    ALTER TABLE loads ADD COLUMN geofence_radius INTEGER DEFAULT 300;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_lat') THEN
+    ALTER TABLE drivers ADD COLUMN last_known_lat DECIMAL(10,7);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_lng') THEN
+    ALTER TABLE drivers ADD COLUMN last_known_lng DECIMAL(10,7);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_speed') THEN
+    ALTER TABLE drivers ADD COLUMN last_known_speed DECIMAL(6,2);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_heading') THEN
+    ALTER TABLE drivers ADD COLUMN last_known_heading DECIMAL(5,2);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_position_update') THEN
+    ALTER TABLE drivers ADD COLUMN last_position_update TIMESTAMPTZ;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='miles_driven') THEN
+    ALTER TABLE loads ADD COLUMN miles_driven DECIMAL(10,3) DEFAULT 0;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_gps_events_driver ON gps_events(driver_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_gps_events_load ON gps_events(load_id);
+CREATE INDEX IF NOT EXISTS idx_geofence_events_load ON geofence_events(load_id);
+CREATE INDEX IF NOT EXISTS idx_ifta_company_quarter ON ifta_state_mileage(company_id, quarter);
+
 CREATE INDEX IF NOT EXISTS idx_loads_company ON loads(company_id);
 CREATE INDEX IF NOT EXISTS idx_loads_status ON loads(company_id, status);
 CREATE INDEX IF NOT EXISTS idx_drivers_company ON drivers(company_id);

@@ -89,6 +89,26 @@ app.post('/api/driver/login', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Driver deep-link login via acceptance_token (SMS link) ──
+app.post('/api/driver/login-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+    const loadRes = await pool.query(
+      `SELECT l.id as load_id, l.driver_id, l.company_id FROM loads l WHERE l.acceptance_token = $1`,
+      [token]
+    );
+    if (!loadRes.rows.length) return res.status(404).json({ error: 'Invalid or expired link. Contact your dispatcher.' });
+    const { load_id, driver_id, company_id } = loadRes.rows[0];
+    if (!driver_id) return res.status(400).json({ error: 'No driver assigned to this load.' });
+    const driverRes = await pool.query('SELECT * FROM drivers WHERE id = $1', [driver_id]);
+    if (!driverRes.rows.length) return res.status(404).json({ error: 'Driver not found.' });
+    const driver = driverRes.rows[0];
+    const jwt = signToken({ driver_id: driver.id, company_id: company_id || driver.company_id, name: driver.name });
+    res.json({ jwt, driver, load_id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Driver Portal: My Loads ──
 app.get('/api/driver/loads', driverAuthMiddleware, async (req, res) => {
   try {
@@ -317,14 +337,38 @@ app.get('/api/loads', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Geocoding helper (Nominatim — no API key needed) ──
+async function geocodeAddress(address, city, state) {
+  if (!city && !state) return null;
+  const q = [address, city, state].filter(Boolean).join(', ');
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=us`,
+      { headers: { 'User-Agent': 'HaulFlow-TMS/1.0 (kevanaenterprises@gmail.com)' } }
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data.length) return null;
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch { return null; }
+}
+
 app.post('/api/loads', authMiddleware, async (req, res) => {
   try {
     const { load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description, miles, fuel_surcharge } = req.body;
     if (!load_number) return res.status(400).json({ error: 'Load number required' });
+
+    // Geocode origin and destination in parallel (best-effort, don't block on failure)
+    const [originGeo, destGeo] = await Promise.all([
+      geocodeAddress(origin_address, origin_city, origin_state),
+      geocodeAddress(dest_address, dest_city, dest_state),
+    ]);
+
     const result = await pool.query(
-      `INSERT INTO loads (company_id, load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description, miles, fuel_surcharge)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-      [req.user.company_id, load_number, customer_id || null, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date || null, delivery_date || null, rate || null, cargo_description || null, miles || null, fuel_surcharge || null]
+      `INSERT INTO loads (company_id, load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description, miles, fuel_surcharge, shipper_lat, shipper_lng, receiver_lat, receiver_lng)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+      [req.user.company_id, load_number, customer_id || null, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date || null, delivery_date || null, rate || null, cargo_description || null, miles || null, fuel_surcharge || null,
+       originGeo?.lat ?? null, originGeo?.lng ?? null, destGeo?.lat ?? null, destGeo?.lng ?? null]
     );
     res.json(result.rows[0]);
   } catch (e) {
@@ -335,10 +379,28 @@ app.post('/api/loads', authMiddleware, async (req, res) => {
 
 app.patch('/api/loads/:id', authMiddleware, async (req, res) => {
   try {
-    const fields = Object.keys(req.body);
+    const body = { ...req.body };
+    // Re-geocode if any address fields changed
+    const originFields = ['origin_address','origin_city','origin_state'];
+    const destFields = ['dest_address','dest_city','dest_state'];
+    if (originFields.some(f => f in body)) {
+      // Fetch current to fill missing pieces
+      const cur = await pool.query('SELECT origin_address,origin_city,origin_state FROM loads WHERE id=$1', [req.params.id]);
+      const c = cur.rows[0] || {};
+      const geo = await geocodeAddress(body.origin_address??c.origin_address, body.origin_city??c.origin_city, body.origin_state??c.origin_state);
+      if (geo) { body.shipper_lat = geo.lat; body.shipper_lng = geo.lng; }
+    }
+    if (destFields.some(f => f in body)) {
+      const cur = await pool.query('SELECT dest_address,dest_city,dest_state FROM loads WHERE id=$1', [req.params.id]);
+      const c = cur.rows[0] || {};
+      const geo = await geocodeAddress(body.dest_address??c.dest_address, body.dest_city??c.dest_city, body.dest_state??c.dest_state);
+      if (geo) { body.receiver_lat = geo.lat; body.receiver_lng = geo.lng; }
+    }
+
+    const fields = Object.keys(body);
     if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
     const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
-    const values = fields.map(f => req.body[f]);
+    const values = fields.map(f => body[f]);
     const result = await pool.query(
       `UPDATE loads SET ${sets} WHERE id = $1 AND company_id = $${fields.length + 2} RETURNING *`,
       [req.params.id, ...values, req.user.company_id]
@@ -1024,6 +1086,206 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
   if (!r.ok) { console.error('[Email] Resend error:', responseText); throw new Error(`Resend error: ${responseText}`); }
   console.log('[Email] Sent successfully:', responseText);
 }
+
+// ── GPS Location Update (from Expo driver app) ──
+// POST /api/driver/location  { lat, lng, speed, heading, accuracy, load_id, miles_delta, state }
+app.post('/api/driver/location', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { driver_id, company_id } = req.driver;
+    const { lat, lng, speed, heading, accuracy, load_id, miles_delta, state } = req.body;
+    if (!lat || !lng) return res.status(400).json({ error: 'lat/lng required' });
+
+    // Update driver last known position
+    await pool.query(
+      `UPDATE drivers SET last_known_lat=$1, last_known_lng=$2, last_known_speed=$3,
+       last_known_heading=$4, last_position_update=NOW()
+       WHERE id=$5 AND company_id=$6`,
+      [lat, lng, speed ?? null, heading ?? null, driver_id, company_id]
+    );
+
+    // Insert GPS event
+    await pool.query(
+      `INSERT INTO gps_events (company_id, driver_id, load_id, lat, lng, speed, heading, accuracy, state)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [company_id, driver_id, load_id || null, lat, lng, speed ?? null, heading ?? null, accuracy ?? null, state || null]
+    );
+
+    // Accumulate miles on active load
+    if (load_id && miles_delta && miles_delta > 0) {
+      await pool.query(
+        `UPDATE loads SET miles_driven = COALESCE(miles_driven,0) + $1 WHERE id=$2 AND company_id=$3`,
+        [miles_delta, load_id, company_id]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[GPS location]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Geofence Event (enter/exit) ──
+// POST /api/driver/geofence  { load_id, stop_id, stop_type, event_type, lat, lng }
+app.post('/api/driver/geofence', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { driver_id, company_id } = req.driver;
+    const { load_id, stop_id, stop_type, event_type, lat, lng } = req.body;
+    if (!load_id || !event_type) return res.status(400).json({ error: 'load_id and event_type required' });
+
+    // Deduplicate: ignore if same stop+event within last 5 minutes
+    const dup = await pool.query(
+      `SELECT id FROM geofence_events
+       WHERE driver_id=$1 AND load_id=$2 AND stop_id=$3 AND event_type=$4
+         AND recorded_at > NOW() - INTERVAL '5 minutes'`,
+      [driver_id, load_id, stop_id || null, event_type]
+    );
+    if (dup.rows.length) return res.json({ ok: true, duplicate: true });
+
+    await pool.query(
+      `INSERT INTO geofence_events (company_id, driver_id, load_id, stop_id, stop_type, event_type, lat, lng)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [company_id, driver_id, load_id, stop_id || null, stop_type || null, event_type, lat || null, lng || null]
+    );
+
+    // Auto-advance load status on pickup arrive / delivery arrive
+    if (event_type === 'enter' && stop_type === 'pickup') {
+      await pool.query(
+        `UPDATE loads SET status='IN_TRANSIT' WHERE id=$1 AND company_id=$2 AND status='DISPATCHED'`,
+        [load_id, company_id]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Geofence event]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── IFTA Miles Upsert ──
+// POST /api/driver/ifta-miles  { load_id, quarter, state, miles }
+app.post('/api/driver/ifta-miles', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { driver_id, company_id } = req.driver;
+    const { load_id, quarter, state, miles } = req.body;
+    if (!quarter || !state || !miles) return res.status(400).json({ error: 'quarter, state, miles required' });
+
+    await pool.query(
+      `INSERT INTO ifta_state_mileage (company_id, driver_id, load_id, quarter, state, miles)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (company_id, driver_id, quarter, state)
+       DO UPDATE SET miles = ifta_state_mileage.miles + EXCLUDED.miles, updated_at = NOW()`,
+      [company_id, driver_id, load_id || null, quarter, state, miles]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[IFTA miles]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Live Fleet Map ──
+// GET /api/fleet/live  — returns all active drivers with last known position + active load
+app.get('/api/fleet/live', authMiddleware, async (req, res) => {
+  try {
+    const { company_id } = req.user;
+    const result = await pool.query(
+      `SELECT d.id, d.name, d.phone, d.status,
+              d.last_known_lat, d.last_known_lng, d.last_known_speed, d.last_known_heading,
+              d.last_position_update,
+              l.id as load_id, l.load_number, l.status as load_status,
+              l.origin_city, l.origin_state, l.dest_city, l.dest_state, l.miles_driven
+       FROM drivers d
+       LEFT JOIN loads l ON l.driver_id = d.id AND l.status IN ('DISPATCHED','IN_TRANSIT')
+       WHERE d.company_id = $1 AND d.status != 'off_duty'
+       ORDER BY d.name`,
+      [company_id]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error('[Fleet live]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Geofence Events for Load (for detention) ──
+app.get('/api/loads/:id/geofence-events', authMiddleware, async (req, res) => {
+  try {
+    const { company_id } = req.user;
+    const result = await pool.query(
+      `SELECT * FROM geofence_events WHERE load_id=$1 AND company_id=$2 ORDER BY recorded_at`,
+      [req.params.id, company_id]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── IFTA Report ──
+// GET /api/reports/ifta?quarter=2026-Q1
+app.get('/api/reports/ifta', authMiddleware, async (req, res) => {
+  try {
+    const { company_id } = req.user;
+    const { quarter } = req.query;
+
+    // Get available quarters if none specified
+    const quartersRes = await pool.query(
+      `SELECT DISTINCT quarter FROM ifta_state_mileage WHERE company_id=$1 ORDER BY quarter DESC`,
+      [company_id]
+    );
+
+    const q = quarter || quartersRes.rows[0]?.quarter;
+    if (!q) return res.json({ quarters: [], rows: [], summary: [] });
+
+    // Mileage by state for the quarter
+    const milesRes = await pool.query(
+      `SELECT state, SUM(miles) as total_miles
+       FROM ifta_state_mileage WHERE company_id=$1 AND quarter=$2
+       GROUP BY state ORDER BY state`,
+      [company_id, q]
+    );
+
+    // Fuel by state for the period
+    const [yr, qn] = q.split('-Q');
+    const qStart = new Date(parseInt(yr), (parseInt(qn)-1)*3, 1);
+    const qEnd = new Date(parseInt(yr), parseInt(qn)*3, 1);
+    const fuelRes = await pool.query(
+      `SELECT state, SUM(gallons) as total_gallons, SUM(total_amount) as total_amount
+       FROM fuel_purchases
+       WHERE company_id=$1 AND purchase_date >= $2 AND purchase_date < $3
+       GROUP BY state ORDER BY state`,
+      [company_id, qStart, qEnd]
+    );
+
+    // Merge
+    const stateMap = {};
+    for (const r of milesRes.rows) {
+      stateMap[r.state] = { state: r.state, miles: parseFloat(r.total_miles) || 0, gallons: 0, fuel_amount: 0 };
+    }
+    for (const r of fuelRes.rows) {
+      if (!stateMap[r.state]) stateMap[r.state] = { state: r.state, miles: 0 };
+      stateMap[r.state].gallons = parseFloat(r.total_gallons) || 0;
+      stateMap[r.state].fuel_amount = parseFloat(r.total_amount) || 0;
+    }
+
+    const rows = Object.values(stateMap).sort((a,b) => a.state.localeCompare(b.state));
+    const totalMiles = rows.reduce((s,r) => s + r.miles, 0);
+    const totalGallons = rows.reduce((s,r) => s + r.gallons, 0);
+
+    res.json({
+      quarter: q,
+      quarters: quartersRes.rows.map(r => r.quarter),
+      rows,
+      summary: { total_miles: totalMiles, total_gallons: totalGallons, mpg: totalGallons ? (totalMiles/totalGallons).toFixed(2) : null }
+    });
+  } catch (e) {
+    console.error('[IFTA report]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Serve frontend
 app.use(express.static(join(__dirname, '../dist')));

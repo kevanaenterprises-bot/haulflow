@@ -23,6 +23,7 @@ export default function LoadsView() {
   const [showCreate, setShowCreate] = useState(false);
   const [assignLoad, setAssignLoad] = useState<Load | null>(null);
   const [previewLoad, setPreviewLoad] = useState<Load | null>(null);
+  const [detailLoad, setDetailLoad] = useState<Load | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const fetchAll = async (silent = false) => {
@@ -53,7 +54,7 @@ export default function LoadsView() {
   const awaitingDispatch = byStatus('WAITING_DISPATCH').length;
   const inTransit = byStatus('IN_TRANSIT').length;
   const pendingPayment = byStatus('INVOICED').length;
-  const invoicedTotal = loads.filter(l => l.status === 'INVOICED').reduce((s, l) => s + (l.rate || 0), 0);
+  const invoicedTotal = loads.filter(l => l.status === 'INVOICED').reduce((s, l) => s + (parseFloat(String(l.rate)) || 0), 0);
 
   const toggleCollapse = (status: string) => setCollapsed(p => ({ ...p, [status]: !p[status] }));
 
@@ -113,7 +114,7 @@ export default function LoadsView() {
         {SECTIONS.map(section => {
           const sectionLoads = byStatus(section.status);
           const isOpen = !collapsed[section.status];
-          const total = sectionLoads.reduce((s, l) => s + (l.rate || 0), 0);
+          const total = sectionLoads.reduce((s, l) => s + (parseFloat(String(l.rate)) || 0), 0);
           return (
             <div key={section.status} id={`section-${section.status}`} className={cn('bg-white border rounded-xl overflow-hidden shadow-sm', section.border)}>
               <button
@@ -151,6 +152,7 @@ export default function LoadsView() {
                           onAssign={() => setAssignLoad(load)}
                           onRefresh={() => fetchAll(true)}
                           onPreview={() => setPreviewLoad(load)}
+                          onViewDetail={() => setDetailLoad(load)}
                         />
                       ))}
                     </div>
@@ -162,7 +164,7 @@ export default function LoadsView() {
         })}
 
         {/* Paid section */}
-        <PaidSection loads={paidLoads} />
+        <PaidSection loads={paidLoads} onViewDetail={setDetailLoad} />
       </div>
 
       {showCreate && (
@@ -173,6 +175,9 @@ export default function LoadsView() {
       )}
       {previewLoad && (
         <InvoicePreviewModal load={previewLoad} onClose={() => setPreviewLoad(null)} />
+      )}
+      {detailLoad && (
+        <LoadDetailModal load={detailLoad} onClose={() => setDetailLoad(null)} onRefresh={() => { setDetailLoad(null); fetchAll(true); }} />
       )}
     </div>
   );
@@ -193,7 +198,7 @@ function StatCard({ label, value, sub, icon: Icon, iconBg, iconColor }: { label:
   );
 }
 
-function LoadCard({ load, onAssign, onRefresh, onPreview }: { load: Load; onAssign: () => void; onRefresh: () => void; onPreview: () => void }) {
+function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail }: { load: Load; onAssign: () => void; onRefresh: () => void; onPreview: () => void; onViewDetail: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [editingInvNum, setEditingInvNum] = useState(false);
@@ -323,7 +328,7 @@ function LoadCard({ load, onAssign, onRefresh, onPreview }: { load: Load; onAssi
 
         {/* Action buttons */}
         <div className="flex gap-2 pt-1">
-          <button className="flex-1 text-xs border border-gray-200 hover:bg-gray-50 text-gray-600 py-1.5 rounded-lg font-medium transition">
+          <button onClick={onViewDetail} className="flex-1 text-xs border border-gray-200 hover:bg-gray-50 text-gray-600 py-1.5 rounded-lg font-medium transition">
             View Details
           </button>
           {load.status === 'WAITING_DISPATCH' && (
@@ -352,9 +357,9 @@ function LoadCard({ load, onAssign, onRefresh, onPreview }: { load: Load; onAssi
   );
 }
 
-function PaidSection({ loads }: { loads: Load[] }) {
+function PaidSection({ loads, onViewDetail }: { loads: Load[]; onViewDetail: (l: Load) => void }) {
   const [open, setOpen] = useState(false);
-  const total = loads.reduce((s, l) => s + (l.rate || 0), 0);
+  const total = loads.reduce((s, l) => s + (parseFloat(String(l.rate)) || 0), 0);
   return (
     <div className="bg-white border border-green-200 rounded-xl overflow-hidden shadow-sm">
       <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
@@ -372,13 +377,13 @@ function PaidSection({ loads }: { loads: Load[] }) {
         </div>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-sm font-semibold text-green-600">{formatCurrency(total)}</span>}
-          <span className="text-sm text-brand-500 font-medium">View All →</span>
+          <ChevronDown className={cn('w-4 h-4 text-gray-400 transition-transform', open && 'rotate-180')} />
         </div>
       </button>
       {open && loads.length > 0 && (
         <div className="border-t border-gray-100 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {loads.map(l => (
-            <div key={l.id} className="bg-gray-50 rounded-xl border border-gray-100 p-3 text-xs text-gray-500">
+            <button key={l.id} onClick={() => onViewDetail(l)} className="bg-gray-50 rounded-xl border border-gray-100 p-3 text-xs text-gray-500 text-left hover:bg-green-50 hover:border-green-200 transition w-full">
               <div className="flex items-center justify-between mb-1">
                 <span className="font-bold text-gray-700">#{l.load_number}</span>
                 {l.rate && <span className="font-semibold text-green-600">{formatCurrency(l.rate)}</span>}
@@ -387,10 +392,158 @@ function PaidSection({ loads }: { loads: Load[] }) {
               {(l.origin_city || l.dest_city) && (
                 <p className="text-gray-400 mt-0.5">{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</p>
               )}
-            </div>
+              <p className="text-brand-500 font-medium mt-1.5">View Details →</p>
+            </button>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function LoadDetailModal({ load, onClose }: { load: Load; onClose: () => void; onRefresh: () => void }) {
+  const STATUS_LABELS: Record<string, string> = {
+    WAITING_DISPATCH: 'Waiting on Dispatch', DISPATCHED: 'Dispatched', IN_TRANSIT: 'In Transit',
+    WAITING_INVOICING: 'Waiting on Invoice', INVOICED: 'Waiting on Payment', PAID: 'Paid',
+  };
+  const STATUS_COLORS: Record<string, string> = {
+    WAITING_DISPATCH: 'bg-amber-100 text-amber-700', DISPATCHED: 'bg-sky-100 text-sky-700',
+    IN_TRANSIT: 'bg-blue-100 text-blue-700', WAITING_INVOICING: 'bg-orange-100 text-orange-700',
+    INVOICED: 'bg-emerald-100 text-emerald-700', PAID: 'bg-green-100 text-green-700',
+  };
+
+  const fields = [
+    { label: 'Load #', value: load.load_number },
+    { label: 'Customer', value: load.customer_name },
+    { label: 'Driver', value: load.driver_name },
+    { label: 'Origin', value: [load.origin_address, load.origin_city, load.origin_state].filter(Boolean).join(', ') },
+    { label: 'Destination', value: [load.dest_address, load.dest_city, load.dest_state].filter(Boolean).join(', ') },
+    { label: 'Pickup Date', value: load.pickup_date ? formatDate(load.pickup_date) : null },
+    { label: 'Delivery Date', value: load.delivery_date ? formatDate(load.delivery_date) : null },
+    { label: 'Cargo', value: load.cargo_description },
+    { label: 'BOL #', value: load.bol_number },
+    { label: 'Miles', value: load.miles ? `${load.miles} mi` : null },
+  ];
+
+  const charges = [
+    { label: 'Base Rate', value: load.rate },
+    { label: 'Fuel Surcharge', value: (load as any).fuel_surcharge },
+    { label: 'Extra Stop Fee', value: load.extra_stop_fee },
+    { label: 'Lumper Fee', value: load.lumper_fee },
+    { label: 'Detention Fee', value: (load as any).detention_fee },
+  ].filter(c => c.value);
+
+  const total = charges.reduce((s, c) => s + (parseFloat(String(c.value)) || 0), 0);
+
+  const podUrls: string[] = (() => {
+    try {
+      const arr = (load as any).pod_urls;
+      if (Array.isArray(arr) && arr.length) return arr;
+      if (typeof arr === 'string') return JSON.parse(arr);
+    } catch {}
+    if (load.pod_url) return [load.pod_url];
+    return [];
+  })();
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <div className="flex-1 bg-black/40" onClick={onClose} />
+      {/* Panel */}
+      <div className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-gray-900 text-lg">#{load.load_number}</span>
+            <span className={cn('text-xs font-semibold px-2.5 py-1 rounded-full', STATUS_COLORS[load.status] || 'bg-gray-100 text-gray-600')}>
+              {STATUS_LABELS[load.status] || load.status}
+            </span>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* Fields */}
+          <div className="bg-gray-50 rounded-xl p-4 grid grid-cols-2 gap-x-6 gap-y-3">
+            {fields.filter(f => f.value).map(f => (
+              <div key={f.label} className={f.label === 'Origin' || f.label === 'Destination' || f.label === 'Cargo' ? 'col-span-2' : ''}>
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">{f.label}</p>
+                <p className="text-sm font-semibold text-gray-800">{f.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Charges */}
+          {charges.length > 0 && (
+            <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Charges</p>
+              </div>
+              <div className="p-4 space-y-2">
+                {charges.map(c => (
+                  <div key={c.label} className="flex justify-between text-sm">
+                    <span className="text-gray-500">{c.label}</span>
+                    <span className="font-semibold text-gray-900">{formatCurrency(c.value as number)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm pt-2 border-t border-gray-100">
+                  <span className="font-bold text-gray-700">Total</span>
+                  <span className="font-bold text-gray-900">{formatCurrency(total)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Invoice info */}
+          {load.invoice_number && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+              <FileText className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>Invoice <span className="font-bold text-emerald-700">{load.invoice_number}</span></span>
+            </div>
+          )}
+
+          {/* POD images */}
+          {podUrls.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Proof of Delivery ({podUrls.length})</p>
+              <div className="grid grid-cols-3 gap-2">
+                {podUrls.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                    className="aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-brand-400 transition block bg-gray-100">
+                    <img src={url} alt={`POD ${i+1}`} className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Driver notes */}
+          {(load as any).driver_notes && (
+            <div className="bg-yellow-50 border border-yellow-100 rounded-xl px-4 py-3">
+              <p className="text-xs font-bold text-yellow-700 uppercase tracking-wide mb-1">Driver Notes</p>
+              <p className="text-sm text-yellow-800">{(load as any).driver_notes}</p>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          {load.accepted_at && (
+            <div className="text-xs text-gray-400 space-y-1">
+              {load.accepted_at && <p>Accepted: {new Date(load.accepted_at).toLocaleString()}</p>}
+              {(load as any).delivered_at && <p>Delivered: {new Date((load as any).delivered_at).toLocaleString()}</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50">
+          <button onClick={onClose} className="w-full py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-white transition">
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
