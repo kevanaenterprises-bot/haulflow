@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, DollarSign, Send, CheckCircle, Clock, ChevronDown, Search, X } from 'lucide-react';
+import { FileText, DollarSign, Send, CheckCircle, Clock, ChevronDown, Search, X, BarChart2, Download } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Invoice } from '../types';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
@@ -11,6 +11,8 @@ export default function InvoicesView() {
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [showAudit, setShowAudit] = useState(false);
   const [audit, setAudit] = useState<any>(null);
+  const [showAging, setShowAging] = useState(false);
+  const [aging, setAging] = useState<any>(null);
 
   const fetch = async () => {
     const inv = await api.get('/api/invoices').catch(() => []);
@@ -52,14 +54,23 @@ export default function InvoicesView() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-900">Invoices</h1>
-        <button
-          onClick={() => { api.get('/api/invoices/audit').then(a => { setAudit(a); setShowAudit(true); }); }}
-          className="flex items-center gap-2 text-sm border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg transition"
-        >
-          <Search className="w-4 h-4 text-gray-500" /> Invoice Audit
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { api.get('/api/reports/ar-aging').then(a => { setAging(a); setShowAging(true); }); }}
+            className="flex items-center gap-2 text-sm bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition font-medium"
+          >
+            <BarChart2 className="w-4 h-4" /> AR Aging
+          </button>
+          <button
+            onClick={() => { api.get('/api/invoices/audit').then(a => { setAudit(a); setShowAudit(true); }); }}
+            className="flex items-center gap-2 text-sm border border-gray-300 hover:bg-gray-50 px-3 py-2 rounded-lg transition"
+          >
+            <Search className="w-4 h-4 text-gray-500" /> Invoice Audit
+          </button>
+        </div>
       </div>
       {showAudit && audit && <AuditModal audit={audit} onClose={() => setShowAudit(false)} />}
+      {showAging && aging && <ARAgingModal aging={aging} onClose={() => setShowAging(false)} />}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -241,6 +252,146 @@ function InvoiceBreakdown({ inv }: { inv: any }) {
           <div className="flex justify-between border-t pt-1 font-semibold"><span>Total</span><span>{formatCurrency(inv.amount)}</span></div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── AR Aging Modal ──
+const BUCKET_COLORS: Record<string, { bg: string; text: string; bar: string; label: string }> = {
+  '0-30':  { bg: 'bg-green-50',  text: 'text-green-700',  bar: 'bg-green-500',  label: 'Current (0–30 days)' },
+  '31-60': { bg: 'bg-yellow-50', text: 'text-yellow-700', bar: 'bg-yellow-500', label: '31–60 days' },
+  '61-90': { bg: 'bg-orange-50', text: 'text-orange-700', bar: 'bg-orange-500', label: '61–90 days' },
+  '90+':   { bg: 'bg-red-50',    text: 'text-red-700',    bar: 'bg-red-500',    label: 'Over 90 days' },
+};
+
+function ARAgingModal({ aging, onClose }: { aging: any; onClose: () => void }) {
+  const { rows, buckets, grand_total } = aging;
+  const [filterBucket, setFilterBucket] = useState<string | null>(null);
+
+  const visibleRows: any[] = filterBucket ? rows.filter((r: any) => r.bucket === filterBucket) : rows;
+
+  const exportCSV = () => {
+    const headers = ['Invoice #', 'Customer', 'Load #', 'Invoice Date', 'Days Outstanding', 'Bucket', 'Amount'];
+    const lines = [
+      headers.join(','),
+      ...rows.map((r: any) => [
+        r.invoice_number,
+        `"${r.customer_name || ''}"`,
+        r.load_number,
+        new Date(r.created_at).toLocaleDateString(),
+        r.days_outstanding,
+        r.bucket,
+        r.amount,
+      ].join(',')),
+      `,,,,,,${grand_total.toFixed(2)}`,
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ar-aging-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-900 text-lg">Accounts Receivable Aging</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{rows.length} unpaid invoice{rows.length !== 1 ? 's' : ''} · Total outstanding: <span className="font-semibold text-red-600">{formatCurrency(grand_total)}</span></p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCSV}
+              className="flex items-center gap-1.5 text-sm bg-brand-500 hover:bg-brand-600 text-white px-3 py-2 rounded-lg transition font-medium"
+            >
+              <Download className="w-4 h-4" /> Export CSV
+            </button>
+            <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-gray-600" /></button>
+          </div>
+        </div>
+
+        {/* Bucket summary cards */}
+        <div className="grid grid-cols-4 gap-3 px-6 py-4 border-b flex-shrink-0">
+          {(['0-30', '31-60', '61-90', '90+'] as const).map(bucket => {
+            const c = BUCKET_COLORS[bucket];
+            const b = buckets[bucket];
+            const pct = grand_total > 0 ? (b.total / grand_total) * 100 : 0;
+            return (
+              <button
+                key={bucket}
+                onClick={() => setFilterBucket(filterBucket === bucket ? null : bucket)}
+                className={cn(
+                  'rounded-xl p-4 text-left border-2 transition',
+                  c.bg,
+                  filterBucket === bucket ? 'border-current ring-2 ring-offset-1' : 'border-transparent hover:border-gray-200',
+                  c.text
+                )}
+              >
+                <div className="text-xs font-medium opacity-75 mb-1">{c.label}</div>
+                <div className="text-xl font-bold">{formatCurrency(b.total)}</div>
+                <div className="text-xs opacity-60 mt-0.5">{b.count} invoice{b.count !== 1 ? 's' : ''}</div>
+                {/* Mini bar */}
+                <div className="mt-2 h-1.5 bg-black/10 rounded-full overflow-hidden">
+                  <div className={cn('h-full rounded-full', c.bar)} style={{ width: `${pct}%` }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto flex-1 px-6 pb-4">
+          {visibleRows.length === 0 ? (
+            <p className="text-center text-gray-400 py-8 text-sm">No invoices in this bucket.</p>
+          ) : (
+            <table className="w-full text-sm mt-4">
+              <thead>
+                <tr className="border-b text-xs text-gray-500 uppercase tracking-wide">
+                  <th className="text-left pb-2 font-medium">Invoice #</th>
+                  <th className="text-left pb-2 font-medium">Customer</th>
+                  <th className="text-left pb-2 font-medium">Load #</th>
+                  <th className="text-left pb-2 font-medium">Invoice Date</th>
+                  <th className="text-right pb-2 font-medium">Days Out</th>
+                  <th className="text-right pb-2 font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {visibleRows.map((row: any) => {
+                  const c = BUCKET_COLORS[row.bucket];
+                  return (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="py-2.5 font-medium text-gray-900">{row.invoice_number}</td>
+                      <td className="py-2.5 text-gray-700">{row.customer_name || '—'}</td>
+                      <td className="py-2.5 text-gray-500">#{row.load_number}</td>
+                      <td className="py-2.5 text-gray-500">{new Date(row.created_at).toLocaleDateString()}</td>
+                      <td className="py-2.5 text-right">
+                        <span className={cn('text-xs px-2 py-0.5 rounded-full font-semibold', c.bg, c.text)}>
+                          {row.days_outstanding}d
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-right font-semibold text-gray-900">{formatCurrency(row.amount)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-gray-300">
+                  <td colSpan={5} className="pt-3 text-sm font-semibold text-gray-700">
+                    {filterBucket ? `${BUCKET_COLORS[filterBucket].label} Total` : 'Grand Total'}
+                  </td>
+                  <td className="pt-3 text-right font-bold text-gray-900">
+                    {formatCurrency(visibleRows.reduce((s: number, r: any) => s + parseFloat(r.amount), 0))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

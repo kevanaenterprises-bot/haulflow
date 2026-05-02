@@ -684,6 +684,38 @@ app.get('/api/invoices/audit', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── AR Aging Report ──
+app.get('/api/reports/ar-aging', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT
+         i.id, i.invoice_number, i.amount, i.created_at, i.status, i.paid_at,
+         c.company_name as customer_name, c.email as customer_email, c.phone as customer_phone,
+         l.load_number, l.delivery_date
+       FROM invoices i
+       JOIN loads l ON l.id = i.load_id
+       LEFT JOIN customers c ON c.id = l.customer_id
+       WHERE i.company_id = $1 AND i.status = 'UNPAID'
+       ORDER BY i.created_at ASC`,
+      [req.user.company_id]
+    );
+    const now = new Date();
+    const rows = r.rows.map(inv => {
+      const days = Math.floor((now - new Date(inv.created_at)) / (1000 * 60 * 60 * 24));
+      const bucket = days <= 30 ? '0-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+';
+      return { ...inv, days_outstanding: days, bucket };
+    });
+    // Bucket totals
+    const buckets = { '0-30': { count: 0, total: 0 }, '31-60': { count: 0, total: 0 }, '61-90': { count: 0, total: 0 }, '90+': { count: 0, total: 0 } };
+    for (const row of rows) {
+      buckets[row.bucket].count++;
+      buckets[row.bucket].total += parseFloat(row.amount) || 0;
+    }
+    const grandTotal = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    res.json({ rows, buckets, grand_total: grandTotal });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Onboarding (public) ──
 app.post('/api/onboard', async (req, res) => {
   try {
