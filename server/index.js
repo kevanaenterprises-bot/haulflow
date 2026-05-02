@@ -128,11 +128,15 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
         const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
         await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [load.company_id]);
         const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0);
-        await pool.query(
-          'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+        const invRes = await pool.query(
+          'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
           [load.company_id, load.id, invNum, total]
         );
         await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1`, [load.id]);
+        // Auto-send email
+        if (invRes.rows[0]) {
+          sendInvoiceEmail(invRes.rows[0].id, load.company_id).catch(e => console.error('[Email]', e.message));
+        }
       } else {
         // Manual mode: move to WAITING_INVOICING
         await pool.query(`UPDATE loads SET status = 'WAITING_INVOICING' WHERE id = $1`, [load.id]);
@@ -478,11 +482,14 @@ app.post('/api/loads/:id/invoice', authMiddleware, async (req, res) => {
     const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
     await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [req.user.company_id]);
     const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0);
-    await pool.query(
-      'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+    const manualInvRes = await pool.query(
+      'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
       [req.user.company_id, load.id, invNum, total]
     );
     await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1`, [load.id]);
+    if (manualInvRes.rows[0]) {
+      sendInvoiceEmail(manualInvRes.rows[0].id, req.user.company_id).catch(e => console.error('[Email]', e.message));
+    }
     res.json({ success: true, invoice_number: invNum });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -546,6 +553,67 @@ app.post('/api/invoices/:id/send', authMiddleware, async (req, res) => {
     });
 
     res.json({ success: true, message: `Invoice sent to ${inv.customer_email}` });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Invoice by load ──
+app.get('/api/invoices/by-load/:loadId', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT i.*, l.load_number, l.origin_city, l.origin_state, l.dest_city, l.dest_state, l.origin_address, l.dest_address,
+              l.pickup_date, l.delivery_date, l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee,
+              l.bol_number, l.pod_url, l.cargo_description,
+              c.company_name as customer_name, c.email as customer_email, c.address as customer_address,
+              comp.name as company_name_own, comp.phone as company_phone, comp.email as company_email_own,
+              comp.payment_terms
+       FROM invoices i
+       JOIN loads l ON l.id = i.load_id
+       LEFT JOIN customers c ON c.id = l.customer_id
+       JOIN companies comp ON comp.id = i.company_id
+       WHERE i.load_id = $1 AND i.company_id = $2
+       ORDER BY i.created_at DESC LIMIT 1`,
+      [req.params.loadId, req.user.company_id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'No invoice found for this load' });
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Invoice PDF download (token via query param for direct link) ──
+app.get('/api/invoices/:id/pdf', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  const payload = verifyToken(token);
+  if (!payload) return res.status(401).json({ error: 'Invalid token' });
+  req.user = payload;
+  try {
+    const invRes = await pool.query(
+      `SELECT i.*, l.*, c.company_name as customer_company, c.email as customer_email
+       FROM invoices i JOIN loads l ON l.id = i.load_id LEFT JOIN customers c ON c.id = l.customer_id
+       WHERE i.id = $1 AND i.company_id = $2`,
+      [req.params.id, req.user.company_id]
+    );
+    if (!invRes.rows.length) return res.status(404).json({ error: 'Invoice not found' });
+    const inv = invRes.rows[0];
+    const compRes = await pool.query('SELECT * FROM companies WHERE id = $1', [req.user.company_id]);
+    const comp = compRes.rows[0];
+    const podImageBuffers = await fetchPodImages(inv.load_id);
+    const pdfBuffer = await buildInvoicePDF({ inv, comp, podImageBuffers });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Invoice_${inv.invoice_number}.pdf"`);
+    res.send(pdfBuffer);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Invoice number audit ──
+app.get('/api/invoices/audit', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT invoice_number, created_at, status, amount FROM invoices WHERE company_id = $1 ORDER BY created_at ASC`,
+      [req.user.company_id]
+    );
+    const compR = await pool.query('SELECT invoice_prefix, invoice_counter FROM companies WHERE id = $1', [req.user.company_id]);
+    res.json({ invoices: r.rows, next_number: compR.rows[0]?.invoice_counter, prefix: compR.rows[0]?.invoice_prefix });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -724,6 +792,28 @@ async function buildInvoicePDF({ inv, comp, podImageBuffers }) {
       doc.font('Helvetica').fontSize(9).fillColor('#888').text(`Payment due within ${comp?.payment_terms || 30} days. Thank you for your business!`, 40, y);
       doc.end();
     } catch (e) { reject(e); }
+  });
+}
+
+async function sendInvoiceEmail(invoiceId, companyId) {
+  const invRes = await pool.query(
+    `SELECT i.*, l.*, c.company_name as customer_company, c.email as customer_email
+     FROM invoices i JOIN loads l ON l.id = i.load_id LEFT JOIN customers c ON c.id = l.customer_id
+     WHERE i.id = $1 AND i.company_id = $2`,
+    [invoiceId, companyId]
+  );
+  if (!invRes.rows.length) return;
+  const inv = invRes.rows[0];
+  if (!inv.customer_email) return; // no email on file, skip silently
+  const compRes = await pool.query('SELECT * FROM companies WHERE id = $1', [companyId]);
+  const comp = compRes.rows[0];
+  const podImageBuffers = await fetchPodImages(inv.load_id);
+  const pdfBuffer = await buildInvoicePDF({ inv, comp, podImageBuffers });
+  await sendEmail({
+    to: inv.customer_email,
+    subject: `Invoice ${inv.invoice_number} — Load #${inv.load_number}`,
+    html: `<p>Dear ${inv.customer_company || 'Valued Customer'},</p><p>Please find attached your invoice for Load <strong>#${inv.load_number}</strong>.</p><p>Payment due within ${comp?.payment_terms || 30} days. Thank you for your business.</p>`,
+    attachments: [{ filename: `Invoice_${inv.invoice_number}.pdf`, content: pdfBuffer }],
   });
 }
 
