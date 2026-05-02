@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS customers (
   address TEXT,
   city VARCHAR(100),
   state VARCHAR(50),
+  fuel_surcharge_enabled BOOLEAN DEFAULT false,
+  fuel_surcharge_per_mile DECIMAL(10,4) DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -95,6 +97,8 @@ CREATE TABLE IF NOT EXISTS loads (
   pickup_date DATE,
   delivery_date DATE,
   rate DECIMAL(10,2),
+  miles INTEGER,
+  fuel_surcharge DECIMAL(10,2),
   extra_stop_fee DECIMAL(10,2),
   lumper_fee DECIMAL(10,2),
   cargo_description TEXT,
@@ -144,6 +148,18 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='job_title') THEN
     ALTER TABLE users ADD COLUMN job_title VARCHAR(100);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='customers' AND column_name='fuel_surcharge_enabled') THEN
+    ALTER TABLE customers ADD COLUMN fuel_surcharge_enabled BOOLEAN DEFAULT false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='customers' AND column_name='fuel_surcharge_per_mile') THEN
+    ALTER TABLE customers ADD COLUMN fuel_surcharge_per_mile DECIMAL(10,4) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='miles') THEN
+    ALTER TABLE loads ADD COLUMN miles INTEGER;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='fuel_surcharge') THEN
+    ALTER TABLE loads ADD COLUMN fuel_surcharge DECIMAL(10,2);
   END IF;
 END $$;
 

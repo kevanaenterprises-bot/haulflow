@@ -13,11 +13,16 @@ export default function CreateLoadModal({ customers, onClose, onCreated }: Props
   const [form, setForm] = useState({
     load_number: '', customer_id: '', origin_address: '', origin_city: '', origin_state: '',
     dest_address: '', dest_city: '', dest_state: '', pickup_date: '', delivery_date: '',
-    rate: '', cargo_description: '',
+    rate: '', miles: '', cargo_description: '',
   });
   const [shippers, setShippers] = useState<Shipper[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const selectedCustomer = customers.find(c => c.id === form.customer_id);
+  const fsEnabled = selectedCustomer?.fuel_surcharge_enabled;
+  const fsRate = Number(selectedCustomer?.fuel_surcharge_per_mile || 0);
+  const fuelSurcharge = fsEnabled && form.miles ? Math.round(fsRate * Number(form.miles) * 100) / 100 : 0;
 
   useEffect(() => {
     api.get('/api/shippers').then(setShippers).catch(() => {});
@@ -45,7 +50,12 @@ export default function CreateLoadModal({ customers, onClose, onCreated }: Props
     setError('');
     setLoading(true);
     try {
-      await api.post('/api/loads', { ...form, rate: form.rate ? parseFloat(form.rate) : null });
+      await api.post('/api/loads', {
+        ...form,
+        rate: form.rate ? parseFloat(form.rate) : null,
+        miles: form.miles ? parseInt(form.miles) : null,
+        fuel_surcharge: fuelSurcharge || null,
+      });
       onCreated();
     } catch (err: any) {
       setError(err.message);
@@ -117,6 +127,24 @@ export default function CreateLoadModal({ customers, onClose, onCreated }: Props
 
           <div className="grid grid-cols-2 gap-4 border-t pt-4">
             <Field label="Rate ($)" type="number" value={form.rate} onChange={v => set('rate', v)} placeholder="0.00" />
+            <Field label="Miles" type="number" value={form.miles} onChange={v => set('miles', v)} placeholder="e.g. 450" />
+          </div>
+
+          {/* Fuel surcharge preview */}
+          {fsEnabled && (
+            <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${form.miles ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'}`}>
+              <div className="flex items-center gap-2">
+                <span>⛽</span>
+                <span className="font-medium text-gray-700">Fuel Surcharge</span>
+                <span className="text-xs text-gray-400">(${fsRate.toFixed(3)}/mile × {form.miles || '?'} miles)</span>
+              </div>
+              <span className={`font-bold ${fuelSurcharge > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                {fuelSurcharge > 0 ? `$${fuelSurcharge.toFixed(2)}` : 'Enter miles'}
+              </span>
+            </div>
+          )}
+
+          <div className="border-t pt-4">
             <Field label="Cargo Description" value={form.cargo_description} onChange={v => set('cargo_description', v)} />
           </div>
 

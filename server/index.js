@@ -100,12 +100,12 @@ app.get('/api/loads', authMiddleware, async (req, res) => {
 
 app.post('/api/loads', authMiddleware, async (req, res) => {
   try {
-    const { load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description } = req.body;
+    const { load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description, miles, fuel_surcharge } = req.body;
     if (!load_number) return res.status(400).json({ error: 'Load number required' });
     const result = await pool.query(
-      `INSERT INTO loads (company_id, load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [req.user.company_id, load_number, customer_id || null, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date || null, delivery_date || null, rate || null, cargo_description || null]
+      `INSERT INTO loads (company_id, load_number, customer_id, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date, delivery_date, rate, cargo_description, miles, fuel_surcharge)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [req.user.company_id, load_number, customer_id || null, origin_address, origin_city, origin_state, dest_address, dest_city, dest_state, pickup_date || null, delivery_date || null, rate || null, cargo_description || null, miles || null, fuel_surcharge || null]
     );
     res.json(result.rows[0]);
   } catch (e) {
@@ -185,11 +185,11 @@ app.get('/api/customers', authMiddleware, async (req, res) => {
 
 app.post('/api/customers', authMiddleware, async (req, res) => {
   try {
-    const { company_name, contact_name, email, phone, address, city, state } = req.body;
+    const { company_name, contact_name, email, phone, address, city, state, fuel_surcharge_enabled, fuel_surcharge_per_mile } = req.body;
     if (!company_name) return res.status(400).json({ error: 'Company name required' });
     const result = await pool.query(
-      'INSERT INTO customers (company_id, company_name, contact_name, email, phone, address, city, state) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [req.user.company_id, company_name, contact_name || null, email || null, phone || null, address || null, city || null, state || null]
+      'INSERT INTO customers (company_id, company_name, contact_name, email, phone, address, city, state, fuel_surcharge_enabled, fuel_surcharge_per_mile) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *',
+      [req.user.company_id, company_name, contact_name || null, email || null, phone || null, address || null, city || null, state || null, fuel_surcharge_enabled || false, fuel_surcharge_per_mile || 0]
     );
     res.json(result.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -361,7 +361,9 @@ app.post('/api/loads/:id/status', async (req, res) => {
 app.get('/api/invoices', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.*, l.load_number, l.origin_city, l.origin_state, l.dest_city, l.dest_state, c.company_name as customer_name
+      `SELECT i.*, l.load_number, l.origin_city, l.origin_state, l.dest_city, l.dest_state,
+              l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee,
+              c.company_name as customer_name
        FROM invoices i JOIN loads l ON l.id = i.load_id LEFT JOIN customers c ON c.id = l.customer_id
        WHERE i.company_id = $1 ORDER BY i.created_at DESC`,
       [req.user.company_id]

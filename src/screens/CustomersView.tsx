@@ -59,6 +59,11 @@ export default function CustomersView() {
               {c.phone && <div className="flex items-center gap-2 text-sm text-gray-500"><Phone className="w-3.5 h-3.5" />{c.phone}</div>}
               {c.email && <div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><Mail className="w-3.5 h-3.5" />{c.email}</div>}
               {(c.city || c.state) && <div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><MapPin className="w-3.5 h-3.5" />{[c.city, c.state].filter(Boolean).join(', ')}</div>}
+              {c.fuel_surcharge_enabled && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-full w-fit font-medium">
+                  ⛽ FS: ${Number(c.fuel_surcharge_per_mile || 0).toFixed(3)}/mile
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -78,6 +83,8 @@ function CustomerForm({ customer, onClose, onSaved }: { customer: Customer | nul
     address: customer?.address || '',
     city: customer?.city || '',
     state: customer?.state || '',
+    fuel_surcharge_enabled: customer?.fuel_surcharge_enabled || false,
+    fuel_surcharge_per_mile: customer?.fuel_surcharge_per_mile?.toString() || '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -87,8 +94,12 @@ function CustomerForm({ customer, onClose, onSaved }: { customer: Customer | nul
     e.preventDefault();
     setLoading(true);
     try {
-      if (customer) await api.patch(`/api/customers/${customer.id}`, form);
-      else await api.post('/api/customers', form);
+      const payload = {
+        ...form,
+        fuel_surcharge_per_mile: form.fuel_surcharge_per_mile ? parseFloat(form.fuel_surcharge_per_mile) : 0,
+      };
+      if (customer) await api.patch(`/api/customers/${customer.id}`, payload);
+      else await api.post('/api/customers', payload);
       onSaved();
     } catch (err: any) { setError(err.message); }
     setLoading(false);
@@ -116,6 +127,30 @@ function CustomerForm({ customer, onClose, onSaved }: { customer: Customer | nul
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
             </div>
           ))}
+          {/* Fuel Surcharge */}
+          <div className="border-t pt-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Fuel Surcharge</p>
+                <p className="text-xs text-gray-400">Billed as FS rate × miles on invoice</p>
+              </div>
+              <button type="button" onClick={() => setForm(p => ({ ...p, fuel_surcharge_enabled: !p.fuel_surcharge_enabled }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.fuel_surcharge_enabled ? 'bg-brand-500' : 'bg-gray-200'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${form.fuel_surcharge_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            {form.fuel_surcharge_enabled && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rate per Mile ($)</label>
+                <input type="number" step="0.001" min="0" value={form.fuel_surcharge_per_mile}
+                  onChange={e => set('fuel_surcharge_per_mile', e.target.value)}
+                  placeholder="e.g. 0.125"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                <p className="text-xs text-gray-400 mt-1">Example: 0.125 = $0.125/mile × 500 miles = $62.50 FS</p>
+              </div>
+            )}
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 border border-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>

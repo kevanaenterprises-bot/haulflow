@@ -79,6 +79,8 @@ export interface Customer {
   address?: string;
   city?: string;
   state?: string;
+  fuel_surcharge_enabled?: boolean;
+  fuel_surcharge_per_mile?: number;
 }
 
 export interface Load {
@@ -99,6 +101,8 @@ export interface Load {
   pickup_date?: string;
   delivery_date?: string;
   rate?: number;
+  miles?: number;
+  fuel_surcharge?: number;
   extra_stop_fee?: number;
   lumper_fee?: number;
   cargo_description?: string;

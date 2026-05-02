@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, DollarSign, Send, CheckCircle, Clock } from 'lucide-react';
+import { FileText, DollarSign, Send, CheckCircle, Clock, ChevronDown } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Invoice } from '../types';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
@@ -94,7 +94,9 @@ export default function InvoicesView() {
             <tbody className="divide-y divide-gray-50">
               {invoices.map(inv => (
                 <tr key={inv.id} className="hover:bg-gray-50 transition">
-                  <td className="px-4 py-3 font-semibold text-gray-900">{inv.invoice_number}</td>
+                  <td className="px-4 py-3">
+                    <InvoiceBreakdown inv={inv} />
+                  </td>
                   <td className="px-4 py-3 text-gray-600">#{(inv as any).load_number || inv.load_id?.slice(0, 8)}</td>
                   <td className="px-4 py-3 text-gray-600">{(inv as any).customer_name || '—'}</td>
                   <td className="px-4 py-3 font-semibold text-gray-900">{formatCurrency(inv.amount)}</td>
@@ -133,6 +135,29 @@ export default function InvoicesView() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvoiceBreakdown({ inv }: { inv: any }) {
+  const [open, setOpen] = useState(false);
+  const hasBreakdown = inv.load_rate || inv.fuel_surcharge || inv.extra_stop_fee || inv.lumper_fee;
+
+  return (
+    <div>
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1 font-semibold text-gray-900 hover:text-brand-600 transition">
+        {inv.invoice_number}
+        {hasBreakdown && <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />}
+      </button>
+      {open && hasBreakdown && (
+        <div className="mt-2 bg-gray-50 rounded-lg p-3 text-xs space-y-1 min-w-[200px]">
+          {inv.load_rate && <div className="flex justify-between"><span className="text-gray-500">Line Haul</span><span className="font-medium">{formatCurrency(inv.load_rate)}</span></div>}
+          {inv.fuel_surcharge && <div className="flex justify-between text-amber-700"><span>⛽ Fuel Surcharge{inv.miles ? ` (${inv.miles} mi)` : ''}</span><span className="font-medium">{formatCurrency(inv.fuel_surcharge)}</span></div>}
+          {inv.extra_stop_fee && <div className="flex justify-between"><span className="text-gray-500">Extra Stop</span><span className="font-medium">{formatCurrency(inv.extra_stop_fee)}</span></div>}
+          {inv.lumper_fee && <div className="flex justify-between"><span className="text-gray-500">Lumper</span><span className="font-medium">{formatCurrency(inv.lumper_fee)}</span></div>}
+          <div className="flex justify-between border-t pt-1 font-semibold"><span>Total</span><span>{formatCurrency(inv.amount)}</span></div>
         </div>
       )}
     </div>
