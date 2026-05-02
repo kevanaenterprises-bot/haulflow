@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MapPin, Calendar, Package, LogOut, ChevronRight, CheckCircle, Truck, Upload, Phone } from 'lucide-react';
+import { MapPin, Calendar, Package, LogOut, ChevronRight, CheckCircle, Truck, Upload } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '../../lib/utils';
 
 const API_URL = import.meta.env.VITE_API_URL ||
