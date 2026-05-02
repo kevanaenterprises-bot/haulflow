@@ -1,9 +1,5 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install"
-
-[build.nixpacksConfig]
-nodeVersion = "20"
 
 [deploy]
 startCommand = "node server/index.js"
