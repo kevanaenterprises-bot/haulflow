@@ -309,7 +309,7 @@ function LoadDetail({ load, onBack, onUpdated }: { load: any; onBack: () => void
         {load.status === 'IN_TRANSIT' && (
           <button onClick={handleDeliver} disabled={updating}
             className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-bold text-base transition disabled:opacity-50 shadow-lg shadow-green-200">
-            {updating ? 'Submitting...' : '📦 Mark as Delivered'}
+            {updating ? 'Uploading & Submitting...' : '📦 Mark as Delivered'}
           </button>
         )}
 
