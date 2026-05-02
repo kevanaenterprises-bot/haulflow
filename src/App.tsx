@@ -10,12 +10,37 @@ import InvoicesView from './screens/InvoicesView';
 import ShippersView from './screens/ShippersView';
 import EmployeesView from './screens/EmployeesView';
 import SettingsView from './screens/SettingsView';
+import DriverLoginPage from './screens/driver/DriverLoginPage';
+import DriverDashboard from './screens/driver/DriverDashboard';
 
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees' | 'settings';
+
+function DriverPortal() {
+  const stored = localStorage.getItem('hf_driver');
+  const [driver, setDriver] = useState(stored ? JSON.parse(stored) : null);
+
+  if (!driver) {
+    return <DriverLoginPage onLogin={(_token, d) => setDriver(d)} />;
+  }
+  return (
+    <DriverDashboard
+      driver={driver}
+      onLogout={() => {
+        localStorage.removeItem('hf_driver_token');
+        localStorage.removeItem('hf_driver');
+        setDriver(null);
+      }}
+    />
+  );
+}
 
 function Inner() {
   const { user, loading } = useAuth();
   const [tab, setTab] = useState<Tab>('loads');
+
+  if (window.location.pathname === '/driver') {
+    return <DriverPortal />;
+  }
 
   if (loading) {
     return (
