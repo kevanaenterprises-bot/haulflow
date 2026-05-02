@@ -141,6 +141,13 @@ app.post('/api/driver/loads/:id/pod', driverAuthMiddleware, async (req, res) => 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Helper: parse a numeric field — returns null for empty/NaN/undefined
+function toNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
 // ── Driver Portal: Update Load Status ──
 app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res) => {
   try {
@@ -152,9 +159,9 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
     if (pod_url) updates.pod_url = pod_url;
     if (pod_urls) updates.pod_urls = JSON.stringify(pod_urls);
     if (bol_number != null) updates.bol_number = bol_number;
-    if (extra_stop_fee != null) updates.extra_stop_fee = extra_stop_fee;
-    if (lumper_fee != null) updates.lumper_fee = lumper_fee;
-    if (detention_fee != null) updates.detention_fee = detention_fee;
+    const esf = toNum(extra_stop_fee); if (esf !== null) updates.extra_stop_fee = esf;
+    const lf = toNum(lumper_fee);      if (lf !== null) updates.lumper_fee = lf;
+    const df = toNum(detention_fee);   if (df !== null) updates.detention_fee = df;
     if (driver_notes != null) updates.driver_notes = driver_notes;
     const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 3}`).join(', ');
     const result = await pool.query(
@@ -205,9 +212,9 @@ app.patch('/api/driver/loads/:id/fields', driverAuthMiddleware, async (req, res)
     const { bol_number, extra_stop_fee, lumper_fee, detention_fee, driver_notes } = req.body;
     const updates = {};
     if (bol_number != null) updates.bol_number = bol_number;
-    if (extra_stop_fee != null) updates.extra_stop_fee = extra_stop_fee;
-    if (lumper_fee != null) updates.lumper_fee = lumper_fee;
-    if (detention_fee != null) updates.detention_fee = detention_fee;
+    const esf2 = toNum(extra_stop_fee); if (esf2 !== null) updates.extra_stop_fee = esf2;
+    const lf2 = toNum(lumper_fee);      if (lf2 !== null) updates.lumper_fee = lf2;
+    const df2 = toNum(detention_fee);   if (df2 !== null) updates.detention_fee = df2;
     if (driver_notes != null) updates.driver_notes = driver_notes;
     if (!Object.keys(updates).length) return res.json({});
     const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 3}`).join(', ');
