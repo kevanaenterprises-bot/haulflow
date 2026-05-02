@@ -330,7 +330,7 @@ app.post('/api/onboard', async (req, res) => {
 
     const comp = await pool.query(
       'INSERT INTO companies (name, email, phone, address, city, state) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [company_name, email, phone || null, address || null, city || null, state || null]
+      [company_name, company_email || email, phone || null, null, null, null]
     );
     const user = await pool.query(
       'INSERT INTO users (company_id, email, password_hash, name, role) VALUES ($1,$2,$3,$4,$5) RETURNING *',
