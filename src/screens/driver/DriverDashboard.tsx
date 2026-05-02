@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  LogOut, Truck, Navigation, Mic, ChevronRight, Calendar,
+  LogOut, Truck, Mic, ChevronRight, Calendar,
   Package, AlertTriangle, ArrowLeft, Camera, Upload, X, CheckCircle,
-  FileText, RotateCcw,
+  FileText, RotateCcw, Landmark, Radio,
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '../../lib/utils';
 
@@ -41,6 +41,13 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
   const [accepting, setAccepting] = useState(false);
   const [returning, setReturning] = useState(false);
   const [error, setError] = useState('');
+
+  // Road Tour — historical markers
+  const [tourActive, setTourActive] = useState(false);
+  const [tourMarker, setTourMarker] = useState<{ title: string; summary: string } | null>(null);
+  const tourWatchRef = useRef<number | null>(null);
+  const announcedRef = useRef<Set<string>>(new Set());
+  const lastFetchRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const fetchLoad = useCallback(async () => {
     try {
@@ -98,14 +105,70 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
     setReturning(false);
   };
 
-  const openNavigation = () => {
-    if (!load) return;
-    const dest = encodeURIComponent(
-      [load.dest_address, load.dest_city, load.dest_state].filter(Boolean).join(', ')
+  // Fetch nearby historical markers from Wikipedia geo API
+  const fetchNearbyMarkers = useCallback(async (lat: number, lng: number) => {
+    try {
+      const url = `https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=8000&gslimit=10&format=json&origin=*`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const pages: any[] = data?.query?.geosearch || [];
+      // Filter to likely historical/landmark articles
+      const keywords = ['historic', 'monument', 'landmark', 'marker', 'memorial', 'battlefield', 'fort', 'bridge', 'station', 'museum', 'church', 'cemetery', 'national'];
+      const filtered = pages.filter(p =>
+        keywords.some(k => p.title.toLowerCase().includes(k)) || pages.indexOf(p) < 3
+      );
+      for (const page of filtered.slice(0, 5)) {
+        if (announcedRef.current.has(page.pageid.toString())) continue;
+        // Get a short extract
+        const extractRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(page.title)}`);
+        const extractData = await extractRes.json();
+        const summary = extractData?.extract?.split('. ')[0] || '';
+        if (!summary) continue;
+        announcedRef.current.add(page.pageid.toString());
+        setTourMarker({ title: page.title, summary });
+        speak(`Historical marker nearby: ${page.title}. ${summary}`);
+        break; // announce one at a time
+      }
+    } catch { /* silent fail — no disruption to driver */ }
+  }, [speak]);
+
+  const startTour = () => {
+    if (!navigator.geolocation) {
+      speak('Location services are not available on this device.');
+      return;
+    }
+    setTourActive(true);
+    announcedRef.current = new Set();
+    speak('Road Tour activated. Historical markers along your route will be announced.');
+    tourWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        // Only re-fetch if moved more than ~0.5 miles
+        const last = lastFetchRef.current;
+        const distMoved = last ? Math.hypot(lat - last.lat, lng - last.lng) : 999;
+        if (distMoved > 0.007) {
+          lastFetchRef.current = { lat, lng };
+          fetchNearbyMarkers(lat, lng);
+        }
+      },
+      () => { /* location error — silent */ },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
     );
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
-    speak(`Starting navigation to ${load.dest_city}, ${load.dest_state}.`);
   };
+
+  const stopTour = () => {
+    if (tourWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(tourWatchRef.current);
+      tourWatchRef.current = null;
+    }
+    setTourActive(false);
+    setTourMarker(null);
+    speak('Road Tour stopped.');
+  };
+
+  useEffect(() => () => {
+    if (tourWatchRef.current !== null) navigator.geolocation.clearWatch(tourWatchRef.current);
+  }, []);
 
   if (loading) {
     return (
@@ -222,12 +285,35 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
             <div className="p-4 border-t border-gray-700 space-y-3">
               {/* Road Tour */}
               <button
-                onClick={openNavigation}
-                className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 text-white py-3.5 rounded-xl font-bold text-base transition"
+                onClick={tourActive ? stopTour : startTour}
+                className={cn(
+                  'w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-base transition',
+                  tourActive
+                    ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                    : 'bg-brand-600 hover:bg-brand-500 text-white'
+                )}
               >
-                <Navigation className="w-5 h-5" />
-                Start Road Tour
+                {tourActive
+                  ? <><Radio className="w-5 h-5 animate-pulse" /> Road Tour Active — Tap to Stop</>
+                  : <><Landmark className="w-5 h-5" /> Start Road Tour</>
+                }
               </button>
+
+              {/* Active marker announcement card */}
+              {tourActive && tourMarker && (
+                <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl p-3">
+                  <p className="text-xs text-amber-400 uppercase tracking-wide font-medium mb-1 flex items-center gap-1">
+                    <Landmark className="w-3.5 h-3.5" /> Nearby Historical Marker
+                  </p>
+                  <p className="text-sm font-semibold text-white">{tourMarker.title}</p>
+                  <p className="text-xs text-gray-400 mt-1 leading-relaxed">{tourMarker.summary}</p>
+                </div>
+              )}
+              {tourActive && !tourMarker && (
+                <div className="bg-gray-700/40 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500">Scanning for historical markers along your route...</p>
+                </div>
+              )}
 
               {/* Accept Load (only when DISPATCHED) */}
               {load.status === 'DISPATCHED' && (
