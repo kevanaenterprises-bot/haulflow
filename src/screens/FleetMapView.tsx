@@ -135,24 +135,27 @@ export default function FleetMapView() {
       el.className = 'flex items-center justify-center w-8 h-8 rounded-full bg-blue-600 border-2 border-white shadow-lg cursor-pointer';
       el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1"><path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v9a2 2 0 0 1-2 2h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>`;
 
+      const lat = parseFloat(String(d.last_known_lat));
+      const lng = parseFloat(String(d.last_known_lng));
+
       if (d.last_known_heading != null) {
-        el.style.transform = `rotate(${d.last_known_heading}deg)`;
+        el.style.transform = `rotate(${Number(d.last_known_heading)}deg)`;
       }
 
       if (markersRef.current.has(d.id)) {
-        markersRef.current.get(d.id).setLngLat([d.last_known_lng, d.last_known_lat]);
+        markersRef.current.get(d.id).setLngLat([lng, lat]);
       } else {
         const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
           <div style="font-family:sans-serif;min-width:180px">
             <div style="font-weight:700;font-size:14px;margin-bottom:4px">${d.name}</div>
             ${d.load_number ? `<div style="font-size:12px;color:#555">Load #${d.load_number}</div>` : ''}
             ${d.dest_city ? `<div style="font-size:12px;color:#555">→ ${d.dest_city}, ${d.dest_state}</div>` : ''}
-            ${d.last_known_speed != null ? `<div style="font-size:12px;color:#555">${Math.round((d.last_known_speed || 0) * 2.237)} mph</div>` : ''}
+            ${d.last_known_speed != null ? `<div style="font-size:12px;color:#555">${Math.round(Number(d.last_known_speed) * 2.237)} mph</div>` : ''}
             <div style="font-size:11px;color:#999;margin-top:4px">${timeAgo(d.last_position_update)}</div>
           </div>
         `);
         const marker = new mapboxgl.Marker(el)
-          .setLngLat([d.last_known_lng, d.last_known_lat])
+          .setLngLat([lng, lat])
           .setPopup(popup)
           .addTo(map);
         markersRef.current.set(d.id, marker);
@@ -237,7 +240,7 @@ export default function FleetMapView() {
               onClick={() => {
                 setSelected(d.id === selected ? null : d.id);
                 if (mapInstanceRef.current && d.last_known_lat && d.last_known_lng) {
-                  mapInstanceRef.current.flyTo({ center: [d.last_known_lng, d.last_known_lat], zoom: 10 });
+                  mapInstanceRef.current.flyTo({ center: [parseFloat(String(d.last_known_lng)), parseFloat(String(d.last_known_lat))], zoom: 10 });
                   markersRef.current.get(d.id)?.togglePopup();
                 }
               }}
@@ -273,9 +276,9 @@ export default function FleetMapView() {
               {/* Expanded detail */}
               {selected === d.id && (
                 <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500 space-y-1">
-                  {d.last_known_lat && <div className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {d.last_known_lat.toFixed(4)}, {d.last_known_lng?.toFixed(4)}</div>}
-                  {d.last_known_heading != null && <div className="flex items-center gap-1"><Navigation className="w-3 h-3" /> Heading {Math.round(d.last_known_heading)}°</div>}
-                  {d.miles_driven != null && d.miles_driven > 0 && <div>Miles driven this load: {d.miles_driven.toFixed(1)}</div>}
+                  {d.last_known_lat && <div className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {parseFloat(String(d.last_known_lat)).toFixed(4)}, {parseFloat(String(d.last_known_lng)).toFixed(4)}</div>}
+                  {d.last_known_heading != null && <div className="flex items-center gap-1"><Navigation className="w-3 h-3" /> Heading {Math.round(Number(d.last_known_heading))}°</div>}
+                  {d.miles_driven != null && Number(d.miles_driven) > 0 && <div>Miles driven this load: {parseFloat(String(d.miles_driven)).toFixed(1)}</div>}
                   {d.origin_city && <div>{d.origin_city}, {d.origin_state} → {d.dest_city}, {d.dest_state}</div>}
                 </div>
               )}
@@ -322,11 +325,11 @@ export default function FleetMapView() {
                     <td className="p-4 text-gray-600">{d.load_number ? `#${d.load_number}` : '—'}</td>
                     <td className="p-4 text-gray-600">{d.dest_city ? `${d.dest_city}, ${d.dest_state}` : '—'}</td>
                     <td className="p-4 text-gray-600">
-                      {d.last_known_speed != null ? `${Math.round((d.last_known_speed || 0) * 2.237)} mph` : '—'}
+                      {d.last_known_speed != null ? `${Math.round(Number(d.last_known_speed) * 2.237)} mph` : '—'}
                     </td>
                     <td className="p-4 text-gray-500 text-xs">{timeAgo(d.last_position_update)}</td>
                     <td className="p-4 text-gray-400 text-xs">
-                      {d.last_known_lat ? `${d.last_known_lat.toFixed(3)}, ${d.last_known_lng?.toFixed(3)}` : 'No GPS'}
+                      {d.last_known_lat ? `${parseFloat(String(d.last_known_lat)).toFixed(3)}, ${parseFloat(String(d.last_known_lng)).toFixed(3)}` : 'No GPS'}
                     </td>
                   </tr>
                 ))}
