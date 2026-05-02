@@ -512,6 +512,6 @@ async function sendEmail({ to, subject, html, attachments = [] }) {
 
 // Serve frontend
 app.use(express.static(join(__dirname, '../dist')));
-app.get('*', (req, res) => res.sendFile(join(__dirname, '../dist/index.html')));
+app.get('/{*path}', (req, res) => res.sendFile(join(__dirname, '../dist/index.html')));
 
 app.listen(PORT, () => console.log(`HaulFlow server running on port ${PORT}`));
