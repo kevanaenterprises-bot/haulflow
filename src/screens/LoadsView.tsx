@@ -7,12 +7,11 @@ import CreateLoadModal from '../components/tms/CreateLoadModal';
 import AssignDriverModal from '../components/tms/AssignDriverModal';
 
 const SECTIONS: { status: LoadStatus; label: string; sublabel: string; color: string; border: string; icon: React.ElementType }[] = [
-  { status: 'WAITING_DISPATCH',  label: 'Waiting on Dispatch',  sublabel: 'Loads that need a driver assigned', color: 'text-amber-700',   border: 'border-amber-300',   icon: Clock },
-  { status: 'DISPATCHED',        label: 'Dispatched',            sublabel: 'Driver assigned, en route to pickup', color: 'text-sky-700',     border: 'border-sky-300',     icon: Truck },
-  { status: 'IN_TRANSIT',        label: 'In Transit',            sublabel: 'Actively on the road',            color: 'text-blue-700',    border: 'border-blue-300',    icon: Truck },
-  { status: 'DELIVERED',         label: 'Delivered',             sublabel: 'Delivered, pending processing',   color: 'text-purple-700',  border: 'border-purple-300',  icon: FileText },
-  { status: 'WAITING_INVOICING', label: 'Waiting on Invoicing',  sublabel: 'Delivered — ready to generate invoice', color: 'text-orange-700',  border: 'border-orange-300',  icon: FileText },
-  { status: 'INVOICED',          label: 'Invoiced',              sublabel: 'Invoice sent — awaiting payment', color: 'text-emerald-700', border: 'border-emerald-300', icon: TrendingUp },
+  { status: 'WAITING_DISPATCH',  label: 'Waiting on Dispatch',  sublabel: 'Loads that need a driver assigned',      color: 'text-amber-700',   border: 'border-amber-300',   icon: Clock },
+  { status: 'DISPATCHED',        label: 'Dispatched',            sublabel: 'Driver assigned, en route to pickup',    color: 'text-sky-700',     border: 'border-sky-300',     icon: Truck },
+  { status: 'IN_TRANSIT',        label: 'In Transit',            sublabel: 'Actively on the road',                  color: 'text-blue-700',    border: 'border-blue-300',    icon: Truck },
+  { status: 'WAITING_INVOICING', label: 'Waiting on Invoice',    sublabel: 'Delivered — ready to generate invoice', color: 'text-orange-700',  border: 'border-orange-300',  icon: FileText },
+  { status: 'INVOICED',          label: 'Waiting on Payment',    sublabel: 'Invoice sent — awaiting payment',       color: 'text-emerald-700', border: 'border-emerald-300', icon: TrendingUp },
 ];
 
 export default function LoadsView() {
@@ -86,7 +85,7 @@ export default function LoadsView() {
         <StatCard label="Awaiting Dispatch" value={awaitingDispatch} sub="loads to assign" icon={Clock} iconBg="bg-amber-100" iconColor="text-amber-600" />
         <StatCard label="In Transit" value={inTransit} sub="active shipments" icon={Truck} iconBg="bg-blue-100" iconColor="text-blue-600" />
         <StatCard label="Pending Payment" value={pendingPayment} sub="invoices sent" icon={FileText} iconBg="bg-purple-100" iconColor="text-purple-600" />
-        <StatCard label="Invoiced Total" value={formatCurrency(invoicedTotal)} sub="pending payment" icon={TrendingUp} iconBg="bg-green-100" iconColor="text-green-600" />
+        <StatCard label="Pending Payment Total" value={formatCurrency(invoicedTotal)} sub="awaiting payment" icon={TrendingUp} iconBg="bg-green-100" iconColor="text-green-600" />
       </div>
 
       {/* Pipeline status bar */}

@@ -152,45 +152,66 @@ function toNum(v) {
 app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res) => {
   try {
     const { status, pod_url, pod_urls, bol_number, extra_stop_fee, lumper_fee, detention_fee, driver_notes } = req.body;
-    const allowed = ['IN_TRANSIT', 'DELIVERED'];
-    if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
-    const updates = { status };
-    if (status === 'DELIVERED') updates.delivered_at = new Date().toISOString();
-    if (pod_url) updates.pod_url = pod_url;
-    if (pod_urls) updates.pod_urls = JSON.stringify(pod_urls);
-    if (bol_number != null) updates.bol_number = bol_number;
-    const esf = toNum(extra_stop_fee); if (esf !== null) updates.extra_stop_fee = esf;
-    const lf = toNum(lumper_fee);      if (lf !== null) updates.lumper_fee = lf;
-    const df = toNum(detention_fee);   if (df !== null) updates.detention_fee = df;
-    if (driver_notes != null) updates.driver_notes = driver_notes;
-    const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 3}`).join(', ');
-    const result = await pool.query(
-      `UPDATE loads SET ${sets} WHERE id = $1 AND driver_id = $2 RETURNING *`,
-      [req.params.id, req.driver.driver_id, ...Object.values(updates)]
+    // Only IN_TRANSIT (accept) is allowed — delivery goes straight to INVOICED or WAITING_INVOICING
+    if (!['IN_TRANSIT', 'DELIVERED'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    if (status === 'IN_TRANSIT') {
+      // Simple accept — just flip status
+      const r = await pool.query(
+        `UPDATE loads SET status = 'IN_TRANSIT' WHERE id = $1 AND driver_id = $2 RETURNING *`,
+        [req.params.id, req.driver.driver_id]
+      );
+      if (!r.rows[0]) return res.status(404).json({ error: 'Load not found' });
+      return res.json(r.rows[0]);
+    }
+
+    // ── DELIVERY: skip DELIVERED entirely ──
+    // Step 1: Save all driver-entered fields + mark delivered_at, land in WAITING_INVOICING
+    const fieldUpdates = { delivered_at: new Date().toISOString() };
+    if (pod_url) fieldUpdates.pod_url = pod_url;
+    if (pod_urls) fieldUpdates.pod_urls = JSON.stringify(pod_urls);
+    if (bol_number != null) fieldUpdates.bol_number = bol_number;
+    const esf = toNum(extra_stop_fee); if (esf !== null) fieldUpdates.extra_stop_fee = esf;
+    const lf  = toNum(lumper_fee);     if (lf  !== null) fieldUpdates.lumper_fee = lf;
+    const df  = toNum(detention_fee);  if (df  !== null) fieldUpdates.detention_fee = df;
+    if (driver_notes != null) fieldUpdates.driver_notes = driver_notes;
+
+    const fieldSets = Object.keys(fieldUpdates).map((k, i) => `${k} = $${i + 3}`).join(', ');
+    const fieldResult = await pool.query(
+      `UPDATE loads SET status = 'WAITING_INVOICING', ${fieldSets} WHERE id = $1 AND driver_id = $2 RETURNING *`,
+      [req.params.id, req.driver.driver_id, ...Object.values(fieldUpdates)]
     );
-    if (!result.rows[0]) return res.status(404).json({ error: 'Load not found' });
-    // On delivery: check auto_invoicing setting
-    if (status === 'DELIVERED') {
-      const load = result.rows[0];
-      const company = await pool.query('SELECT * FROM companies WHERE id = $1', [load.company_id]);
-      const comp = company.rows[0];
-      if (comp.auto_invoicing !== false) {
+    if (!fieldResult.rows[0]) return res.status(404).json({ error: 'Load not found' });
+    const load = fieldResult.rows[0];
+
+    // Step 2: Check auto_invoicing — if ON, create invoice + send email → INVOICED
+    //         If OFF or anything fails → stays at WAITING_INVOICING (admin creates manually)
+    try {
+      const companyRes = await pool.query('SELECT * FROM companies WHERE id = $1', [load.company_id]);
+      const comp = companyRes.rows[0];
+      if (comp && comp.auto_invoicing !== false) {
         const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
         await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [load.company_id]);
-        const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0) + (load.detention_fee || 0);
+        const total = (parseFloat(load.rate) || 0) + (parseFloat(load.fuel_surcharge) || 0)
+          + (parseFloat(load.extra_stop_fee) || 0) + (parseFloat(load.lumper_fee) || 0) + (parseFloat(load.detention_fee) || 0);
         const invRes = await pool.query(
           'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
           [load.company_id, load.id, invNum, total]
         );
-        await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1`, [load.id]);
         if (invRes.rows[0]) {
+          // Move to INVOICED only after invoice is committed
+          const finalRes = await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1 RETURNING *`, [load.id]);
+          // Fire email — if it fails, load is already INVOICED (invoice exists, admin can resend)
           sendInvoiceEmail(invRes.rows[0].id, load.company_id).catch(e => console.error('[Email]', e.message));
+          return res.json(finalRes.rows[0]);
         }
-      } else {
-        await pool.query(`UPDATE loads SET status = 'WAITING_INVOICING' WHERE id = $1`, [load.id]);
       }
+    } catch (invoiceErr) {
+      console.error('[Delivery] Invoice/email error — load stays WAITING_INVOICING:', invoiceErr.message);
     }
-    res.json(result.rows[0]);
+
+    // Fallback: return load in WAITING_INVOICING state
+    res.json(load);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

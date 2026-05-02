@@ -46,8 +46,8 @@ export default function SettingsView() {
               <p className="font-medium text-gray-900">Automatic Invoicing</p>
               <p className="text-sm text-gray-500 mt-1">
                 {autoInvoicing
-                  ? 'When a driver submits proof of delivery, an invoice is created automatically and the load moves to Invoiced.'
-                  : 'When a driver submits proof of delivery, the load moves to Waiting on Invoicing. You create the invoice manually from the Load Board.'}
+                  ? 'When a driver submits proof of delivery, an invoice is created automatically and emailed. The load moves to Waiting on Payment.'
+                  : 'When a driver submits proof of delivery, the load moves to Waiting on Invoice. You create the invoice manually from the Load Board.'}
               </p>
             </div>
             <button
@@ -69,7 +69,7 @@ export default function SettingsView() {
             <div className={`rounded-lg p-3 border ${autoInvoicing ? 'bg-brand-50 border-brand-200' : 'bg-gray-50 border-gray-200'}`}>
               <p className={`font-semibold ${autoInvoicing ? 'text-brand-700' : 'text-gray-400'}`}>Auto ON</p>
               <p className={`text-xs mt-1 ${autoInvoicing ? 'text-brand-600' : 'text-gray-400'}`}>
-                Driver delivers → Invoice created → Load moves to <strong>Invoiced</strong>
+                Driver delivers → Invoice created + emailed → Load moves to <strong>Waiting on Payment</strong>
               </p>
             </div>
             <div className={`rounded-lg p-3 border ${!autoInvoicing ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
