@@ -103,31 +103,31 @@ app.get('/api/driver/loads', driverAuthMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Driver Portal: Upload POD via server (avoids anon key storage permissions) ──
+// ── Driver Portal: Upload POD via server using Supabase JS client + service key ──
 app.post('/api/driver/loads/:id/pod', driverAuthMiddleware, async (req, res) => {
   try {
     const { image_base64, mime_type } = req.body;
     if (!image_base64) return res.status(400).json({ error: 'No image provided' });
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ error: 'Storage not configured' });
-    const buffer = Buffer.from(image_base64, 'base64');
-    const path = `pod/${req.params.id}-${Date.now()}.jpg`;
-    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/driver-docs/${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'x-upsert': 'true',
-        'Content-Type': mime_type || 'image/jpeg',
-      },
-      body: buffer,
-    });
-    if (!uploadRes.ok) {
-      const err = await uploadRes.text();
-      console.error('[POD Upload] Supabase error:', err);
-      return res.status(500).json({ error: 'Upload failed: ' + err });
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      console.error('[POD Upload] Missing SUPABASE_URL or SUPABASE_SERVICE_KEY env vars');
+      return res.status(500).json({ error: 'Storage not configured on server' });
     }
-    const pod_url = `${SUPABASE_URL}/storage/v1/object/public/driver-docs/${path}`;
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    const buffer = Buffer.from(image_base64, 'base64');
+    const ext = (mime_type || 'image/jpeg').split('/')[1] || 'jpg';
+    const filePath = `${req.params.id}/${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from('pod-documents')
+      .upload(filePath, buffer, { contentType: mime_type || 'image/jpeg', upsert: true });
+    if (uploadError) {
+      console.error('[POD Upload] Supabase error:', uploadError.message);
+      return res.status(500).json({ error: 'Upload failed: ' + uploadError.message });
+    }
+    const { data: urlData } = supabase.storage.from('pod-documents').getPublicUrl(filePath);
+    const pod_url = urlData.publicUrl;
     console.log('[POD Upload] Success:', pod_url);
     res.json({ pod_url });
   } catch (e) { res.status(500).json({ error: e.message }); }
