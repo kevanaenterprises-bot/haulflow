@@ -170,6 +170,15 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='auto_invoicing') THEN
     ALTER TABLE companies ADD COLUMN auto_invoicing BOOLEAN DEFAULT true;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='detention_fee') THEN
+    ALTER TABLE loads ADD COLUMN detention_fee DECIMAL(10,2);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='pod_urls') THEN
+    ALTER TABLE loads ADD COLUMN pod_urls JSONB DEFAULT '[]';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='driver_notes') THEN
+    ALTER TABLE loads ADD COLUMN driver_notes TEXT;
+  END IF;
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_loads_company ON loads(company_id);

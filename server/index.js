@@ -144,12 +144,18 @@ app.post('/api/driver/loads/:id/pod', driverAuthMiddleware, async (req, res) => 
 // ── Driver Portal: Update Load Status ──
 app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res) => {
   try {
-    const { status, pod_url } = req.body;
+    const { status, pod_url, pod_urls, bol_number, extra_stop_fee, lumper_fee, detention_fee, driver_notes } = req.body;
     const allowed = ['IN_TRANSIT', 'DELIVERED'];
     if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
     const updates = { status };
     if (status === 'DELIVERED') updates.delivered_at = new Date().toISOString();
     if (pod_url) updates.pod_url = pod_url;
+    if (pod_urls) updates.pod_urls = JSON.stringify(pod_urls);
+    if (bol_number != null) updates.bol_number = bol_number;
+    if (extra_stop_fee != null) updates.extra_stop_fee = extra_stop_fee;
+    if (lumper_fee != null) updates.lumper_fee = lumper_fee;
+    if (detention_fee != null) updates.detention_fee = detention_fee;
+    if (driver_notes != null) updates.driver_notes = driver_notes;
     const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 3}`).join(', ');
     const result = await pool.query(
       `UPDATE loads SET ${sets} WHERE id = $1 AND driver_id = $2 RETURNING *`,
@@ -162,31 +168,54 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
       const company = await pool.query('SELECT * FROM companies WHERE id = $1', [load.company_id]);
       const comp = company.rows[0];
       if (comp.auto_invoicing !== false) {
-        // Auto mode: create invoice + move to INVOICED
         const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
         await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [load.company_id]);
-        const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0);
+        const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0) + (load.detention_fee || 0);
         const invRes = await pool.query(
           'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
           [load.company_id, load.id, invNum, total]
         );
         await pool.query(`UPDATE loads SET status = 'INVOICED' WHERE id = $1`, [load.id]);
-        // Auto-send email
         if (invRes.rows[0]) {
           sendInvoiceEmail(invRes.rows[0].id, load.company_id).catch(e => console.error('[Email]', e.message));
         }
       } else {
-        // Manual mode: move to WAITING_INVOICING
         await pool.query(`UPDATE loads SET status = 'WAITING_INVOICING' WHERE id = $1`, [load.id]);
       }
-      // Mirror to driver Supabase
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const driverSupabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-        await driverSupabase.from('loads').update({ status: 'DELIVERED', delivered_at: updates.delivered_at }).eq('id', load.id);
-      } catch (_) {}
     }
     res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Driver Portal: Return Load to Dispatch ──
+app.patch('/api/driver/loads/:id/return', driverAuthMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `UPDATE loads SET status = 'WAITING_DISPATCH', driver_id = NULL WHERE id = $1 AND driver_id = $2 AND status IN ('DISPATCHED','IN_TRANSIT') RETURNING *`,
+      [req.params.id, req.driver.driver_id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Load not found or cannot be returned' });
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Driver Portal: Update Load Fields (BOL, fees) without status change ──
+app.patch('/api/driver/loads/:id/fields', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { bol_number, extra_stop_fee, lumper_fee, detention_fee, driver_notes } = req.body;
+    const updates = {};
+    if (bol_number != null) updates.bol_number = bol_number;
+    if (extra_stop_fee != null) updates.extra_stop_fee = extra_stop_fee;
+    if (lumper_fee != null) updates.lumper_fee = lumper_fee;
+    if (detention_fee != null) updates.detention_fee = detention_fee;
+    if (driver_notes != null) updates.driver_notes = driver_notes;
+    if (!Object.keys(updates).length) return res.json({});
+    const sets = Object.keys(updates).map((k, i) => `${k} = $${i + 3}`).join(', ');
+    const result = await pool.query(
+      `UPDATE loads SET ${sets} WHERE id = $1 AND driver_id = $2 RETURNING *`,
+      [req.params.id, req.driver.driver_id, ...Object.values(updates)]
+    );
+    res.json(result.rows[0] || {});
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -519,7 +548,7 @@ app.post('/api/loads/:id/invoice', authMiddleware, async (req, res) => {
     const comp = cr.rows[0];
     const invNum = `${comp.invoice_prefix}-${comp.invoice_counter}`;
     await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [req.user.company_id]);
-    const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0);
+    const total = (load.rate || 0) + (load.fuel_surcharge || 0) + (load.extra_stop_fee || 0) + (load.lumper_fee || 0) + (load.detention_fee || 0);
     const manualInvRes = await pool.query(
       'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
       [req.user.company_id, load.id, invNum, total]

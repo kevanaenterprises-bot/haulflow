@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
-import { MapPin, Calendar, Package, LogOut, ChevronRight, CheckCircle, Truck, Upload } from 'lucide-react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  LogOut, Truck, Navigation, Mic, ChevronRight, Calendar,
+  Package, AlertTriangle, ArrowLeft, Camera, Upload, X, CheckCircle,
+  FileText, RotateCcw,
+} from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '../../lib/utils';
 
-const API_URL = import.meta.env.VITE_API_URL ||
+const API_URL =
+  import.meta.env.VITE_API_URL ||
   (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 
 async function driverApi(path: string, method = 'GET', body?: any) {
@@ -10,7 +15,7 @@ async function driverApi(path: string, method = 'GET', body?: any) {
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -22,303 +27,591 @@ interface Props {
   onLogout: () => void;
 }
 
-export default function DriverDashboard({ driver, onLogout }: Props) {
-  const [loads, setLoads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedLoad, setSelectedLoad] = useState<any | null>(null);
+type View = 'dashboard' | 'detail';
 
-  const fetchLoads = async () => {
-    const l = await driverApi('/api/driver/loads').catch(() => []);
-    setLoads(l);
+export default function DriverDashboard({ driver, onLogout }: Props) {
+  const [load, setLoad] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<View>('dashboard');
+  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>(
+    (localStorage.getItem('hf_voice') as any) || 'female'
+  );
+  const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  const [showAcceptWarning, setShowAcceptWarning] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+  const [returning, setReturning] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchLoad = useCallback(async () => {
+    try {
+      const loads = await driverApi('/api/driver/loads');
+      const active = loads.find((l: any) => ['DISPATCHED', 'IN_TRANSIT'].includes(l.status));
+      setLoad(active || null);
+    } catch { setLoad(null); }
     setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchLoad(); }, [fetchLoad]);
+
+  const toggleVoice = () => {
+    const next = voiceGender === 'female' ? 'male' : 'female';
+    setVoiceGender(next);
+    localStorage.setItem('hf_voice', next);
   };
 
-  useEffect(() => { fetchLoads(); }, []);
+  const speak = (text: string) => {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = voices.find(v =>
+      voiceGender === 'female'
+        ? v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Victoria')
+        : v.name.toLowerCase().includes('male') || v.name.includes('Alex') || v.name.includes('Daniel')
+    );
+    if (preferred) utt.voice = preferred;
+    utt.rate = 0.95;
+    window.speechSynthesis.speak(utt);
+  };
 
-  if (selectedLoad) {
+  const handleAccept = async () => {
+    setAccepting(true);
+    setError('');
+    try {
+      const updated = await driverApi(`/api/driver/loads/${load.id}/status`, 'PATCH', { status: 'IN_TRANSIT' });
+      setLoad(updated);
+      setShowAcceptWarning(false);
+      speak(`Load ${load.load_number} accepted. Heading to ${load.dest_city}, ${load.dest_state}. Drive safe.`);
+    } catch (e: any) { setError(e.message); }
+    setAccepting(false);
+  };
+
+  const handleReturn = async () => {
+    setReturning(true);
+    setError('');
+    try {
+      await driverApi(`/api/driver/loads/${load.id}/return`, 'PATCH');
+      setLoad(null);
+      setShowReturnConfirm(false);
+      setView('dashboard');
+    } catch (e: any) { setError(e.message); }
+    setReturning(false);
+  };
+
+  const openNavigation = () => {
+    if (!load) return;
+    const dest = encodeURIComponent(
+      [load.dest_address, load.dest_city, load.dest_state].filter(Boolean).join(', ')
+    );
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`, '_blank');
+    speak(`Starting navigation to ${load.dest_city}, ${load.dest_state}.`);
+  };
+
+  if (loading) {
     return (
-      <LoadDetail
-        load={selectedLoad}
-        onBack={() => { setSelectedLoad(null); fetchLoads(); }}
-        onUpdated={(updated) => { setSelectedLoad(updated); fetchLoads(); }}
-      />
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Truck className="w-10 h-10 text-brand-400 animate-pulse" />
+      </div>
     );
   }
 
-  const activeLoads = loads.filter(l => ['DISPATCHED', 'IN_TRANSIT'].includes(l.status));
-  const completedLoads = loads.filter(l => ['DELIVERED', 'INVOICED'].includes(l.status));
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <div className="bg-brand-600 text-white px-4 pt-10 pb-6">
-        <div className="flex items-center justify-between mb-1">
+      <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
+        <div className="flex items-center justify-between">
           <div>
-            <p className="text-brand-200 text-sm">Welcome back,</p>
-            <h1 className="text-xl font-bold">{driver.name}</h1>
+            <p className="text-gray-400 text-xs">Welcome back</p>
+            <h1 className="text-lg font-bold">{driver.name}</h1>
           </div>
-          <button onClick={onLogout} className="p-2 bg-brand-700 rounded-xl">
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="flex gap-3 mt-4">
-          <div className="flex-1 bg-brand-700/60 rounded-xl px-4 py-3 text-center">
-            <div className="text-2xl font-bold">{activeLoads.length}</div>
-            <div className="text-xs text-brand-200 mt-0.5">Active</div>
-          </div>
-          <div className="flex-1 bg-brand-700/60 rounded-xl px-4 py-3 text-center">
-            <div className="text-2xl font-bold">{completedLoads.length}</div>
-            <div className="text-xs text-brand-200 mt-0.5">Completed</div>
+          <div className="flex items-center gap-2">
+            {/* Voice toggle */}
+            <button
+              onClick={toggleVoice}
+              title={`Voice: ${voiceGender}`}
+              className="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-xl text-xs font-medium transition"
+            >
+              {voiceGender === 'female' ? <Mic className="w-4 h-4 text-pink-400" /> : <Mic className="w-4 h-4 text-blue-400" />}
+              <span className={voiceGender === 'female' ? 'text-pink-400' : 'text-blue-400'}>
+                {voiceGender === 'female' ? '♀ Female' : '♂ Male'}
+              </span>
+            </button>
+            <button onClick={onLogout} className="p-2 bg-gray-700 hover:bg-gray-600 rounded-xl transition">
+              <LogOut className="w-4 h-4 text-gray-400" />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-5 space-y-5">
-        {loading && <p className="text-center text-gray-400 py-8">Loading loads...</p>}
+      {/* No load state */}
+      {!load && (
+        <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+          <Truck className="w-16 h-16 text-gray-700 mb-4" />
+          <h2 className="text-xl font-bold text-gray-300 mb-2">No Active Load</h2>
+          <p className="text-gray-500 text-sm">Check back when dispatch assigns you a load.</p>
+        </div>
+      )}
 
-        {/* Active loads */}
-        {activeLoads.length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Active Loads</h2>
-            <div className="space-y-3">
-              {activeLoads.map(load => (
-                <LoadCard key={load.id} load={load} onSelect={() => setSelectedLoad(load)} />
-              ))}
+      {/* Load view */}
+      {load && view === 'dashboard' && (
+        <div className="px-4 py-5 space-y-4">
+          {error && <p className="text-sm text-red-400 bg-red-900/30 px-4 py-3 rounded-xl">{error}</p>}
+
+          {/* Status badge */}
+          <div className={cn(
+            'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold',
+            load.status === 'DISPATCHED' ? 'bg-amber-900/40 text-amber-300' : 'bg-blue-900/40 text-blue-300'
+          )}>
+            <div className={cn('w-2 h-2 rounded-full animate-pulse', load.status === 'DISPATCHED' ? 'bg-amber-400' : 'bg-blue-400')} />
+            {load.status === 'DISPATCHED' ? 'Assigned — Awaiting Acceptance' : 'In Transit'}
+          </div>
+
+          {/* Load card */}
+          <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden">
+            <div className="p-4 border-b border-gray-700">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-xl font-bold">#{load.load_number}</span>
+                  {load.customer_name && <p className="text-gray-400 text-sm mt-0.5">{load.customer_name}</p>}
+                </div>
+                {load.rate && <span className="text-brand-400 font-bold text-lg">{formatCurrency(load.rate)}</span>}
+              </div>
+            </div>
+
+            {/* Route */}
+            <div className="p-4 space-y-3">
+              <div className="flex gap-3">
+                <div className="flex flex-col items-center pt-1">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <div className="w-0.5 flex-1 bg-gray-600 my-1" />
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                </div>
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Pickup</p>
+                    <p className="font-semibold">{load.origin_city}, {load.origin_state}</p>
+                    {load.origin_address && <p className="text-sm text-gray-400">{load.origin_address}</p>}
+                    {load.pickup_date && (
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />{formatDate(load.pickup_date)}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Delivery</p>
+                    <p className="font-semibold">{load.dest_city}, {load.dest_state}</p>
+                    {load.dest_address && <p className="text-sm text-gray-400">{load.dest_address}</p>}
+                    {load.delivery_date && (
+                      <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />{formatDate(load.delivery_date)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {load.cargo_description && (
+                <div className="flex items-start gap-2 pt-1 border-t border-gray-700">
+                  <Package className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm text-gray-400">{load.cargo_description}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Action buttons */}
+            <div className="p-4 border-t border-gray-700 space-y-3">
+              {/* Road Tour */}
+              <button
+                onClick={openNavigation}
+                className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-500 text-white py-3.5 rounded-xl font-bold text-base transition"
+              >
+                <Navigation className="w-5 h-5" />
+                Start Road Tour
+              </button>
+
+              {/* Accept Load (only when DISPATCHED) */}
+              {load.status === 'DISPATCHED' && (
+                <button
+                  onClick={() => setShowAcceptWarning(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white py-3.5 rounded-xl font-bold text-base transition"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  Accept Load
+                </button>
+              )}
+
+              {/* Open Load (only when IN_TRANSIT) */}
+              {load.status === 'IN_TRANSIT' && (
+                <button
+                  onClick={() => setView('detail')}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl font-bold text-base transition"
+                >
+                  <FileText className="w-5 h-5" />
+                  Open Load
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Return to Dispatch */}
+              <button
+                onClick={() => setShowReturnConfirm(true)}
+                className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-300 py-3 rounded-xl font-medium text-sm transition"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Return Load to Dispatch
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {!loading && activeLoads.length === 0 && (
-          <div className="text-center py-12">
-            <Truck className="w-14 h-14 mx-auto text-gray-200 mb-3" />
-            <p className="text-gray-400 font-medium">No active loads</p>
-            <p className="text-gray-300 text-sm mt-1">Check back when a load is assigned to you</p>
-          </div>
-        )}
+      {/* Load detail view */}
+      {load && view === 'detail' && (
+        <LoadDetail
+          load={load}
 
-        {/* Completed loads */}
-        {completedLoads.length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Completed</h2>
-            <div className="space-y-2">
-              {completedLoads.map(load => (
-                <LoadCard key={load.id} load={load} onSelect={() => setSelectedLoad(load)} dimmed />
-              ))}
+          speak={speak}
+          onBack={() => { setView('dashboard'); fetchLoad(); }}
+          onDelivered={() => { setLoad(null); setView('dashboard'); }}
+        />
+      )}
+
+      {/* Accept warning modal */}
+      {showAcceptWarning && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4">
+          <div className="bg-gray-800 rounded-2xl w-full max-w-md p-6 space-y-4 border border-gray-700">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-lg">Accept Load #{load?.load_number}?</h3>
+                <p className="text-gray-400 text-sm mt-2">
+                  By accepting this load, you confirm that you will track your location from pickup until arrival at the receiver. Your location will be visible to dispatch until delivery is complete.
+                </p>
+              </div>
+            </div>
+            {error && <p className="text-sm text-red-400 bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
+            <div className="flex gap-3">
+              <button onClick={() => setShowAcceptWarning(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 py-3 rounded-xl font-medium transition">
+                Cancel
+              </button>
+              <button onClick={handleAccept} disabled={accepting} className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold transition disabled:opacity-50">
+                {accepting ? 'Accepting...' : 'Accept & Start'}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Return confirm modal */}
+      {showReturnConfirm && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center p-4">
+          <div className="bg-gray-800 rounded-2xl w-full max-w-md p-6 space-y-4 border border-gray-700">
+            <div className="flex items-start gap-3">
+              <RotateCcw className="w-6 h-6 text-orange-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-lg">Return Load to Dispatch?</h3>
+                <p className="text-gray-400 text-sm mt-2">
+                  This will send load #{load?.load_number} back to the dispatch queue. Dispatch will need to reassign it.
+                </p>
+              </div>
+            </div>
+            {error && <p className="text-sm text-red-400 bg-red-900/30 px-3 py-2 rounded-lg">{error}</p>}
+            <div className="flex gap-3">
+              <button onClick={() => setShowReturnConfirm(false)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 py-3 rounded-xl font-medium transition">
+                Cancel
+              </button>
+              <button onClick={handleReturn} disabled={returning} className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold transition disabled:opacity-50">
+                {returning ? 'Returning...' : 'Yes, Return It'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function LoadCard({ load, onSelect, dimmed = false }: { load: any; onSelect: () => void; dimmed?: boolean }) {
-  const statusColors: Record<string, string> = {
-    DISPATCHED: 'bg-amber-100 text-amber-700',
-    IN_TRANSIT: 'bg-blue-100 text-blue-700',
-    DELIVERED: 'bg-green-100 text-green-700',
-    INVOICED: 'bg-purple-100 text-purple-700',
-  };
-  const statusLabels: Record<string, string> = {
-    DISPATCHED: 'Assigned — Tap to Accept',
-    IN_TRANSIT: 'In Transit',
-    DELIVERED: 'Delivered',
-    INVOICED: 'Invoiced',
-  };
-
-  return (
-    <button onClick={onSelect} className={cn('w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left transition active:scale-95', dimmed && 'opacity-60')}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <span className="font-bold text-gray-900 text-base">#{load.load_number}</span>
-          {load.customer_name && <p className="text-xs text-gray-400 mt-0.5">{load.customer_name}</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={cn('text-xs px-2.5 py-1 rounded-full font-medium', statusColors[load.status] || 'bg-gray-100 text-gray-500')}>
-            {statusLabels[load.status] || load.status}
-          </span>
-          <ChevronRight className="w-4 h-4 text-gray-300" />
-        </div>
-      </div>
-      {(load.origin_city || load.dest_city) && (
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          <span className="truncate">{load.origin_city}, {load.origin_state} → {load.dest_city}, {load.dest_state}</span>
-        </div>
-      )}
-      {load.pickup_date && (
-        <div className="flex items-center gap-2 text-xs text-gray-400 mt-2">
-          <Calendar className="w-3.5 h-3.5" />
-          Pickup: {formatDate(load.pickup_date)}
-        </div>
-      )}
-      {load.rate && (
-        <div className="mt-2 text-sm font-semibold text-brand-600">{formatCurrency(load.rate)}</div>
-      )}
-    </button>
-  );
-}
-
-function LoadDetail({ load, onBack, onUpdated }: { load: any; onBack: () => void; onUpdated: (l: any) => void }) {
-  const [updating, setUpdating] = useState(false);
-  const [podFile, setPodFile] = useState<File | null>(null);
-  const [podPreview, setPodPreview] = useState<string | null>(null);
+// ─────────────────────────────────────────────
+// Load Detail Screen
+// ─────────────────────────────────────────────
+function LoadDetail({
+  load: initialLoad,
+  speak,
+  onBack,
+  onDelivered,
+}: {
+  load: any;
+  speak: (t: string) => void;
+  onBack: () => void;
+  onDelivered: () => void;
+}) {
+  const [load] = useState(initialLoad);
+  const [bol, setBol] = useState(load.bol_number || '');
+  const [extraStop, setExtraStop] = useState(load.extra_stop_fee || '');
+  const [lumper, setLumper] = useState(load.lumper_fee || '');
+  const [detention, setDetention] = useState(load.detention_fee || '');
+  const [podFiles, setPodFiles] = useState<{ file: File; preview: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [delivering, setDelivering] = useState(false);
   const [error, setError] = useState('');
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPodFile(file);
-    setPodPreview(URL.createObjectURL(file));
+  const bolFilled = bol.trim().length > 0;
+  const canDeliver = bolFilled && podFiles.length > 0;
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return;
+    const newEntries = Array.from(files).map(f => ({ file: f, preview: URL.createObjectURL(f) }));
+    setPodFiles(prev => [...prev, ...newEntries]);
   };
 
-  const uploadPod = async (): Promise<string | null> => {
-    if (!podFile) return null;
-    // Convert file to base64 and upload via server (server uses service key for Supabase)
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result.split(',')[1]); // strip data:image/jpeg;base64, prefix
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(podFile);
-    });
-    const data = await driverApi(`/api/driver/loads/${load.id}/pod`, 'POST', {
-      image_base64: base64,
-      mime_type: podFile.type,
-    });
-    return data.pod_url || null;
+  const removePod = (idx: number) => {
+    setPodFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const handleAccept = async () => {
-    setUpdating(true);
-    setError('');
-    try {
-      const updated = await driverApi(`/api/driver/loads/${load.id}/status`, 'PATCH', { status: 'IN_TRANSIT' });
-      onUpdated(updated);
-    } catch (err: any) { setError(err.message); }
-    setUpdating(false);
+  const uploadAllPods = async (): Promise<string[]> => {
+    const urls: string[] = [];
+    for (const { file } of podFiles) {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const data = await driverApi(`/api/driver/loads/${load.id}/pod`, 'POST', {
+        image_base64: base64,
+        mime_type: file.type,
+      });
+      if (data.pod_url) urls.push(data.pod_url);
+    }
+    return urls;
   };
 
   const handleDeliver = async () => {
-    if (!podFile) { setError('Please take or upload a POD photo first'); return; }
-    setUpdating(true);
+    if (!canDeliver) return;
+    setDelivering(true);
     setError('');
     try {
-      const pod_url = await uploadPod();
-      if (!pod_url) { setError('Photo upload failed — please try again'); setUpdating(false); return; }
-      const updated = await driverApi(`/api/driver/loads/${load.id}/status`, 'PATCH', { status: 'DELIVERED', pod_url });
-      onUpdated(updated);
-    } catch (err: any) { setError(err.message); }
-    setUpdating(false);
+      setUploading(true);
+      const pod_urls = await uploadAllPods();
+      setUploading(false);
+      if (!pod_urls.length) { setError('POD photo upload failed — try again'); setDelivering(false); return; }
+      await driverApi(`/api/driver/loads/${load.id}/status`, 'PATCH', {
+        status: 'DELIVERED',
+        pod_url: pod_urls[0],
+        pod_urls,
+        bol_number: bol,
+        extra_stop_fee: extraStop ? parseFloat(extraStop) : null,
+        lumper_fee: lumper ? parseFloat(lumper) : null,
+        detention_fee: detention ? parseFloat(detention) : null,
+      });
+      speak(`Load ${load.load_number} delivered. Great work.`);
+      onDelivered();
+    } catch (e: any) { setError(e.message); }
+    setUploading(false);
+    setDelivering(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900 text-white pb-10">
       {/* Header */}
-      <div className="bg-brand-600 text-white px-4 pt-10 pb-5">
-        <button onClick={onBack} className="text-brand-200 text-sm mb-3 flex items-center gap-1">
-          ← Back to loads
+      <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
+        <button onClick={onBack} className="flex items-center gap-1 text-gray-400 text-sm mb-3">
+          <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <h1 className="text-xl font-bold">Load #{load.load_number}</h1>
-        {load.customer_name && <p className="text-brand-200 text-sm">{load.customer_name}</p>}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-bold">Load #{load.load_number}</h1>
+            {load.customer_name && <p className="text-gray-400 text-sm">{load.customer_name}</p>}
+          </div>
+          <span className="text-xs bg-blue-900/50 text-blue-300 px-3 py-1.5 rounded-full font-medium">In Transit</span>
+        </div>
       </div>
 
       <div className="px-4 py-5 space-y-4">
-        {/* Route card */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 space-y-4">
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Pickup</p>
-            <p className="font-semibold text-gray-900">{load.origin_city}, {load.origin_state}</p>
-            {load.origin_address && <p className="text-sm text-gray-500">{load.origin_address}</p>}
-            {load.pickup_date && <p className="text-sm text-brand-600 mt-1">📅 {formatDate(load.pickup_date)}</p>}
-          </div>
-          <div className="border-t pt-4">
-            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-1">Delivery</p>
-            <p className="font-semibold text-gray-900">{load.dest_city}, {load.dest_state}</p>
-            {load.dest_address && <p className="text-sm text-gray-500">{load.dest_address}</p>}
-            {load.delivery_date && <p className="text-sm text-brand-600 mt-1">📅 {formatDate(load.delivery_date)}</p>}
-          </div>
-        </div>
-
-        {/* Load details */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Load Details</p>
-          <div className="space-y-2">
-            {load.cargo_description && (
-              <div className="flex items-start gap-2">
-                <Package className="w-4 h-4 text-gray-400 mt-0.5" />
-                <span className="text-sm text-gray-700">{load.cargo_description}</span>
-              </div>
-            )}
-            {load.miles && <div className="text-sm text-gray-600">Miles: <span className="font-medium">{load.miles}</span></div>}
-            {load.rate && <div className="text-sm text-gray-600">Rate: <span className="font-semibold text-brand-600">{formatCurrency(load.rate)}</span></div>}
-            {load.fuel_surcharge && <div className="text-sm text-gray-600">⛽ Fuel Surcharge: <span className="font-medium">{formatCurrency(load.fuel_surcharge)}</span></div>}
-            {load.bol_number && <div className="text-sm text-gray-600">BOL: <span className="font-medium">{load.bol_number}</span></div>}
-          </div>
-        </div>
-
-        {/* POD upload — only show when In Transit */}
-        {load.status === 'IN_TRANSIT' && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium mb-3">Proof of Delivery</p>
-            <label className="block cursor-pointer">
-              {podPreview ? (
-                <img src={podPreview} alt="POD" className="w-full rounded-xl object-cover max-h-48" />
-              ) : load.pod_url ? (
-                <img src={load.pod_url} alt="POD" className="w-full rounded-xl object-cover max-h-48" />
-              ) : (
-                <div className="border-2 border-dashed border-gray-200 rounded-xl py-10 flex flex-col items-center gap-2 text-gray-400">
-                  <Upload className="w-8 h-8" />
-                  <span className="text-sm">Tap to take or upload photo</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
-            </label>
-            {(podPreview || load.pod_url) && (
-              <label className="block mt-2 text-center text-xs text-brand-500 underline cursor-pointer">
-                Replace photo
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
-              </label>
-            )}
-          </div>
-        )}
-
-        {/* Delivered POD view */}
-        {load.status === 'DELIVERED' && load.pod_url && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="w-4 h-4 text-green-500" />
-              <p className="text-sm font-medium text-green-700">POD Submitted</p>
+        {/* Route summary */}
+        <div className="bg-gray-800 rounded-2xl border border-gray-700 p-4">
+          <div className="flex gap-3">
+            <div className="flex flex-col items-center pt-1">
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+              <div className="w-0.5 flex-1 bg-gray-600 my-1" />
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
             </div>
-            <img src={load.pod_url} alt="POD" className="w-full rounded-xl object-cover max-h-48" />
+            <div className="flex-1 space-y-2">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Pickup</p>
+                <p className="font-semibold text-sm">{load.origin_city}, {load.origin_state}</p>
+                {load.origin_address && <p className="text-xs text-gray-500">{load.origin_address}</p>}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Delivery</p>
+                <p className="font-semibold text-sm">{load.dest_city}, {load.dest_state}</p>
+                {load.dest_address && <p className="text-xs text-gray-500">{load.dest_address}</p>}
+              </div>
+            </div>
           </div>
-        )}
+        </div>
 
-        {error && <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-xl">{error}</p>}
+        {/* BOL Number — required */}
+        <div className="bg-gray-800 rounded-2xl border border-gray-700 p-4">
+          <label className="block text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">
+            BOL Number <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="text"
+            value={bol}
+            onChange={e => setBol(e.target.value)}
+            placeholder="Enter BOL number"
+            className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 text-base"
+          />
+          {!bolFilled && (
+            <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" /> Required before POD upload is enabled
+            </p>
+          )}
+        </div>
 
-        {/* Action buttons */}
-        {load.status === 'DISPATCHED' && (
-          <button onClick={handleAccept} disabled={updating}
-            className="w-full bg-brand-500 hover:bg-brand-600 text-white py-4 rounded-2xl font-bold text-base transition disabled:opacity-50 shadow-lg shadow-brand-200">
-            {updating ? 'Accepting...' : '✓ Accept Load'}
-          </button>
-        )}
-
-        {load.status === 'IN_TRANSIT' && (
-          <button onClick={handleDeliver} disabled={updating}
-            className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-2xl font-bold text-base transition disabled:opacity-50 shadow-lg shadow-green-200">
-            {updating ? 'Uploading & Submitting...' : '📦 Mark as Delivered'}
-          </button>
-        )}
-
-        {load.status === 'DELIVERED' && (
-          <div className="flex items-center justify-center gap-2 py-4 text-green-600 font-semibold">
-            <CheckCircle className="w-5 h-5" />
-            Load Delivered
+        {/* Fee fields */}
+        <div className="bg-gray-800 rounded-2xl border border-gray-700 p-4 space-y-3">
+          <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Additional Charges</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Extra Stop</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={extraStop}
+                  onChange={e => setExtraStop(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl pl-6 pr-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Lumper</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={lumper}
+                  onChange={e => setLumper(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl pl-6 pr-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Detention</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={detention}
+                  onChange={e => setDetention(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl pl-6 pr-3 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-500 text-sm"
+                />
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* POD Upload */}
+        <div className={cn('bg-gray-800 rounded-2xl border p-4 space-y-3 transition', bolFilled ? 'border-gray-700' : 'border-gray-700 opacity-50 pointer-events-none')}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">
+              Proof of Delivery {podFiles.length > 0 && <span className="text-green-400">({podFiles.length} photo{podFiles.length > 1 ? 's' : ''})</span>}
+            </p>
+            {!bolFilled && <span className="text-xs text-amber-400">Enter BOL first</span>}
+          </div>
+
+          {/* Existing POD previews */}
+          {podFiles.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {podFiles.map((p, i) => (
+                <div key={i} className="relative">
+                  <img src={p.preview} alt={`POD ${i + 1}`} className="w-full h-24 object-cover rounded-xl" />
+                  <button
+                    onClick={() => removePod(i)}
+                    className="absolute top-1 right-1 bg-black/60 rounded-full p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5 text-white" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upload buttons */}
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => cameraRef.current?.click()}
+              className="flex flex-col items-center gap-1.5 bg-gray-700 hover:bg-gray-600 py-3 rounded-xl text-xs font-medium text-gray-300 transition"
+            >
+              <Camera className="w-5 h-5 text-brand-400" />
+              Camera
+            </button>
+            <button
+              onClick={() => galleryRef.current?.click()}
+              className="flex flex-col items-center gap-1.5 bg-gray-700 hover:bg-gray-600 py-3 rounded-xl text-xs font-medium text-gray-300 transition"
+            >
+              <Upload className="w-5 h-5 text-purple-400" />
+              Gallery
+            </button>
+            <button
+              onClick={() => filesRef.current?.click()}
+              className="flex flex-col items-center gap-1.5 bg-gray-700 hover:bg-gray-600 py-3 rounded-xl text-xs font-medium text-gray-300 transition"
+            >
+              <FileText className="w-5 h-5 text-blue-400" />
+              Files
+            </button>
+          </div>
+
+          {/* Hidden inputs */}
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" multiple onChange={e => addFiles(e.target.files)} />
+          <input ref={galleryRef} type="file" accept="image/*" className="hidden" multiple onChange={e => addFiles(e.target.files)} />
+          <input ref={filesRef} type="file" accept="image/*,application/pdf" className="hidden" multiple onChange={e => addFiles(e.target.files)} />
+        </div>
+
+        {error && <p className="text-sm text-red-400 bg-red-900/30 px-4 py-3 rounded-xl">{error}</p>}
+
+        {/* Deliver button */}
+        <button
+          onClick={handleDeliver}
+          disabled={!canDeliver || delivering}
+          className={cn(
+            'w-full py-4 rounded-2xl font-bold text-base transition',
+            canDeliver && !delivering
+              ? 'bg-green-600 hover:bg-green-500 text-white shadow-lg shadow-green-900/50'
+              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+          )}
+        >
+          {delivering
+            ? (uploading ? `Uploading ${podFiles.length} photo${podFiles.length > 1 ? 's' : ''}...` : 'Marking Delivered...')
+            : !bolFilled
+              ? 'Enter BOL to Continue'
+              : podFiles.length === 0
+                ? 'Add POD Photo to Continue'
+                : '✓ Mark as Delivered'}
+        </button>
+
+        {/* Requirements checklist */}
+        <div className="space-y-1.5">
+          <div className={cn('flex items-center gap-2 text-sm', bolFilled ? 'text-green-400' : 'text-gray-500')}>
+            <CheckCircle className={cn('w-4 h-4', bolFilled ? 'text-green-400' : 'text-gray-600')} />
+            BOL number entered
+          </div>
+          <div className={cn('flex items-center gap-2 text-sm', podFiles.length > 0 ? 'text-green-400' : 'text-gray-500')}>
+            <CheckCircle className={cn('w-4 h-4', podFiles.length > 0 ? 'text-green-400' : 'text-gray-600')} />
+            POD photo attached ({podFiles.length})
+          </div>
+        </div>
       </div>
     </div>
   );
