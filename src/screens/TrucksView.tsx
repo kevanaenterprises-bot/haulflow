@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Truck, Plus, Wrench, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Trash2, Edit2, X } from 'lucide-react';
+import { Truck, Plus, Wrench, AlertTriangle, CheckCircle, Trash2, Edit2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 
