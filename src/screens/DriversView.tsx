@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, User, Phone, Mail, Edit2, Trash2, Upload, FileText } from 'lucide-react';
+import { Plus, User, Phone, Mail, Edit2, Trash2, Upload, FileText, ShieldCheck, CheckCircle, AlertCircle, X, ExternalLink } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Driver } from '../types';
 import { cn } from '../lib/utils';
@@ -9,6 +9,7 @@ export default function DriversView() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Driver | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [dqDriver, setDqDriver] = useState<Driver | null>(null);
 
   const fetch = async () => {
     const d = await api.get('/api/drivers').catch(() => []);
@@ -82,7 +83,7 @@ export default function DriversView() {
               {d.hire_date && <div className="text-xs text-gray-400">Hired: {d.hire_date}</div>}
               {d.termination_date && <div className="text-xs text-red-400">Terminated: {d.termination_date}</div>}
             </div>
-            <div className="flex gap-2 mt-3">
+            <div className="flex gap-2 mt-3 flex-wrap">
               {d.cdl_file_url && (
                 <a href={d.cdl_file_url} target="_blank" rel="noreferrer"
                   className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
@@ -95,12 +96,217 @@ export default function DriversView() {
                   <FileText className="w-3 h-3" /> Medical Card
                 </a>
               )}
+              <button onClick={() => setDqDriver(d)}
+                className="flex items-center gap-1 text-xs text-purple-600 hover:underline font-medium">
+                <ShieldCheck className="w-3 h-3" /> DQ File
+              </button>
             </div>
           </div>
         ))}
       </div>
 
       {showForm && <DriverForm driver={editing} onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); fetch(); }} />}
+      {dqDriver && <DQFileModal driver={dqDriver} onClose={() => setDqDriver(null)} />}
+    </div>
+  );
+}
+
+// ── DQ File Modal ─────────────────────────────────────────────────────────────
+interface DQApp {
+  id: string;
+  full_name: string;
+  dob: string;
+  submitted_at: string;
+  certified_accurate: boolean;
+  cdl_number: string;
+  cdl_class: string;
+  cdl_expiry: string;
+  endorsements: string;
+  cdl_ever_denied: boolean;
+  cdl_ever_suspended: boolean;
+  employment_history: any[];
+  accident_history: any[];
+  violation_history: any[];
+  drug_alcohol_violation: boolean;
+  dot_drug_test_consent: boolean;
+  mvr_url: string;
+  mvr_date: string;
+  psp_url: string;
+  road_test_url: string;
+  pre_employment_drug_url: string;
+  previous_employer_verification_url: string;
+}
+
+function DQFileModal({ driver, onClose }: { driver: Driver; onClose: () => void }) {
+  const [dq, setDq] = useState<DQApp | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'application' | 'documents'>('application');
+  const [docs, setDocs] = useState({ mvr_url: '', mvr_date: '', psp_url: '', road_test_url: '', pre_employment_drug_url: '', previous_employer_verification_url: '' });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get(`/api/drivers/${driver.id}/dq`)
+      .then(data => {
+        setDq(data);
+        if (data) setDocs({ mvr_url: data.mvr_url || '', mvr_date: data.mvr_date || '', psp_url: data.psp_url || '', road_test_url: data.road_test_url || '', pre_employment_drug_url: data.pre_employment_drug_url || '', previous_employer_verification_url: data.previous_employer_verification_url || '' });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [driver.id]);
+
+  const handleSaveDocs = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/api/drivers/${driver.id}/dq/docs`, docs);
+      alert('Documents saved.');
+    } catch (e: any) { alert(e.message); }
+    setSaving(false);
+  };
+
+  const DocRow = ({ label, urlKey, dateKey }: { label: string; urlKey: keyof typeof docs; dateKey?: keyof typeof docs }) => (
+    <div className="border rounded-xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {docs[urlKey] ? <CheckCircle className="w-4 h-4 text-green-500" /> : <AlertCircle className="w-4 h-4 text-gray-300" />}
+          <span className="font-medium text-sm text-gray-800">{label}</span>
+        </div>
+        {docs[urlKey] && <a href={docs[urlKey]} target="_blank" rel="noreferrer" className="text-xs text-brand-500 flex items-center gap-1 hover:underline"><ExternalLink className="w-3 h-3" /> View</a>}
+      </div>
+      <input value={docs[urlKey]} onChange={e => setDocs(p => ({ ...p, [urlKey]: e.target.value }))}
+        placeholder="Paste document URL..." className="w-full border rounded-lg px-3 py-1.5 text-xs text-gray-700 mb-1" />
+      {dateKey && <input type="date" value={docs[dateKey]} onChange={e => setDocs(p => ({ ...p, [dateKey]: e.target.value }))}
+        className="w-full border rounded-lg px-3 py-1.5 text-xs text-gray-700" />}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:rounded-2xl sm:max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div>
+            <h2 className="font-bold text-gray-900 text-lg">{driver.name} — DQ File</h2>
+            <p className="text-xs text-gray-400">Driver Qualification File (FMCSA Part 391)</p>
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b px-6">
+          {(['application', 'documents'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition capitalize ${tab === t ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+              {t === 'application' ? '📋 Digital Application' : '📁 Documents'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {loading ? (
+            <div className="text-center text-gray-400 py-12">Loading...</div>
+          ) : tab === 'application' ? (
+            !dq || !dq.submitted_at ? (
+              <div className="text-center py-12">
+                <ShieldCheck className="w-14 h-14 text-gray-200 mx-auto mb-4" />
+                <h3 className="font-semibold text-gray-700 mb-1">No application on file</h3>
+                <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                  The driver hasn't submitted their digital application yet. Share the HaulFlow Driver app with them — they'll find the application under their profile.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-green-800">Application submitted & certified</p>
+                    <p className="text-xs text-green-600">{new Date(dq.submitted_at).toLocaleString()} · IP: {(dq as any).ip_address}</p>
+                  </div>
+                </div>
+
+                <Section title="Personal Information">
+                  <Row label="Full Name" value={dq.full_name} />
+                  <Row label="Date of Birth" value={dq.dob} />
+                </Section>
+
+                <Section title="CDL Information">
+                  <Row label="CDL Number" value={dq.cdl_number} />
+                  <Row label="Class" value={dq.cdl_class} />
+                  <Row label="Expiry" value={dq.cdl_expiry} />
+                  <Row label="Endorsements" value={dq.endorsements} />
+                  <Row label="Ever denied/suspended" value={dq.cdl_ever_denied || dq.cdl_ever_suspended ? 'Yes — see explanation' : 'No'} warn={dq.cdl_ever_denied || dq.cdl_ever_suspended} />
+                </Section>
+
+                <Section title={`Employment History (${(dq.employment_history || []).length} entries)`}>
+                  {(dq.employment_history || []).length === 0 ? <p className="text-sm text-gray-400">None listed</p> :
+                    (dq.employment_history || []).map((e: any, i: number) => (
+                      <div key={i} className="text-sm text-gray-700 border-l-2 border-gray-200 pl-3 mb-2">
+                        <div className="font-medium">{e.employer}</div>
+                        <div className="text-gray-500">{e.position} · {e.from} – {e.to}</div>
+                        <div className="text-gray-400">{e.reason_for_leaving}</div>
+                      </div>
+                    ))}
+                </Section>
+
+                <Section title={`Accident History (${(dq.accident_history || []).length} entries)`}>
+                  {(dq.accident_history || []).length === 0 ? <p className="text-sm text-green-600 font-medium">✓ None reported</p> :
+                    (dq.accident_history || []).map((a: any, i: number) => (
+                      <div key={i} className="text-sm text-gray-700 border-l-2 border-red-200 pl-3 mb-2">
+                        <div>{a.date} · {a.location}</div>
+                        <div className="text-gray-500">{a.description}</div>
+                      </div>
+                    ))}
+                </Section>
+
+                <Section title={`Traffic Violations (${(dq.violation_history || []).length} entries)`}>
+                  {(dq.violation_history || []).length === 0 ? <p className="text-sm text-green-600 font-medium">✓ None reported</p> :
+                    (dq.violation_history || []).map((v: any, i: number) => (
+                      <div key={i} className="text-sm text-gray-700 border-l-2 border-yellow-200 pl-3 mb-2">
+                        <div>{v.date} · {v.offense}</div>
+                        <div className="text-gray-500">{v.location} · Penalty: {v.penalty}</div>
+                      </div>
+                    ))}
+                </Section>
+
+                <Section title="Drug & Alcohol">
+                  <Row label="DOT drug/alcohol violation history" value={dq.drug_alcohol_violation ? 'Yes — see explanation' : 'No'} warn={dq.drug_alcohol_violation} />
+                  <Row label="Consent to DOT drug test" value={dq.dot_drug_test_consent ? 'Yes — consented' : 'Not yet'} />
+                </Section>
+              </div>
+            )
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500 mb-4">Paste document URLs below. These are stored in the driver's permanent DQ file. Upload files to Supabase Storage or any URL and paste the link.</p>
+              <DocRow label="Motor Vehicle Record (MVR)" urlKey="mvr_url" dateKey="mvr_date" />
+              <DocRow label="CDL Copy" urlKey="psp_url" />
+              <DocRow label="Road Test Certificate" urlKey="road_test_url" />
+              <DocRow label="Pre-Employment Drug Test" urlKey="pre_employment_drug_url" />
+              <DocRow label="Previous Employer Verification" urlKey="previous_employer_verification_url" />
+              <button onClick={handleSaveDocs} disabled={saving}
+                className="w-full bg-brand-500 text-white py-3 rounded-xl font-semibold hover:bg-brand-600 disabled:opacity-50 mt-2">
+                {saving ? 'Saving...' : 'Save Document Links'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{title}</h3>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function Row({ label, value, warn }: { label: string; value: any; warn?: boolean }) {
+  return (
+    <div className="flex justify-between items-center py-1.5 border-b border-gray-50 last:border-0">
+      <span className="text-sm text-gray-500">{label}</span>
+      <span className={`text-sm font-medium ${warn ? 'text-red-600' : 'text-gray-900'}`}>{value || '—'}</span>
     </div>
   );
 }

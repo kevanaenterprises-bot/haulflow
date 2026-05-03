@@ -856,6 +856,196 @@ app.get('/api/reports/ar-aging', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Trucks & Trailers ────────────────────────────────────────────────────────
+app.get('/api/trucks', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT t.*,
+        (SELECT row_to_json(m) FROM maintenance_logs m WHERE m.truck_id = t.id ORDER BY m.service_date DESC LIMIT 1) as last_service,
+        (SELECT COUNT(*) FROM maintenance_logs m WHERE m.truck_id = t.id) as service_count
+       FROM trucks t WHERE t.company_id = $1 ORDER BY t.type, t.unit_number`,
+      [req.user.company_id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/trucks', authMiddleware, async (req, res) => {
+  try {
+    const { type, unit_number, year, make, model, vin, license_plate, plate_state, status, notes } = req.body;
+    const r = await pool.query(
+      `INSERT INTO trucks (company_id, type, unit_number, year, make, model, vin, license_plate, plate_state, status, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.user.company_id, type || 'truck', unit_number, year || null, make, model, vin, license_plate, plate_state, status || 'active', notes]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/trucks/:id', authMiddleware, async (req, res) => {
+  try {
+    const { type, unit_number, year, make, model, vin, license_plate, plate_state, status, notes } = req.body;
+    const r = await pool.query(
+      `UPDATE trucks SET type=$1, unit_number=$2, year=$3, make=$4, model=$5, vin=$6,
+       license_plate=$7, plate_state=$8, status=$9, notes=$10
+       WHERE id=$11 AND company_id=$12 RETURNING *`,
+      [type, unit_number, year || null, make, model, vin, license_plate, plate_state, status, notes, req.params.id, req.user.company_id]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/trucks/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM trucks WHERE id=$1 AND company_id=$2', [req.params.id, req.user.company_id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Maintenance logs
+app.get('/api/trucks/:id/maintenance', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM maintenance_logs WHERE truck_id=$1 AND company_id=$2 ORDER BY service_date DESC`,
+      [req.params.id, req.user.company_id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/trucks/:id/maintenance', authMiddleware, async (req, res) => {
+  try {
+    const { service_type, service_date, odometer, cost, vendor, notes, next_service_date, next_service_miles } = req.body;
+    const r = await pool.query(
+      `INSERT INTO maintenance_logs (company_id, truck_id, service_type, service_date, odometer, cost, vendor, notes, next_service_date, next_service_miles)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [req.user.company_id, req.params.id, service_type, service_date, odometer || null, cost || null, vendor, notes, next_service_date || null, next_service_miles || null]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/trucks/:truckId/maintenance/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM maintenance_logs WHERE id=$1 AND company_id=$2', [req.params.id, req.user.company_id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DQ File ──────────────────────────────────────────────────────────────────
+// Admin: get DQ file for a driver
+app.get('/api/drivers/:id/dq', authMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM driver_applications WHERE driver_id=$1 AND company_id=$2`,
+      [req.params.id, req.user.company_id]
+    );
+    res.json(r.rows[0] || null);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: update DQ document URLs (MVR, PSP, road test, etc.)
+app.patch('/api/drivers/:id/dq/docs', authMiddleware, async (req, res) => {
+  try {
+    const { mvr_url, mvr_date, psp_url, road_test_url, pre_employment_drug_url, previous_employer_verification_url } = req.body;
+    const r = await pool.query(
+      `UPDATE driver_applications SET mvr_url=$1, mvr_date=$2, psp_url=$3, road_test_url=$4,
+       pre_employment_drug_url=$5, previous_employer_verification_url=$6
+       WHERE driver_id=$7 AND company_id=$8 RETURNING *`,
+      [mvr_url, mvr_date || null, psp_url, road_test_url, pre_employment_drug_url, previous_employer_verification_url, req.params.id, req.user.company_id]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Driver app: get own DQ application
+app.get('/api/driver/dq', driverAuthMiddleware, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM driver_applications WHERE driver_id=$1`,
+      [req.driver.driver_id]
+    );
+    res.json(r.rows[0] || null);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Driver app: submit/update DQ application (all 10 sections)
+app.post('/api/driver/dq', driverAuthMiddleware, async (req, res) => {
+  try {
+    const { driver_id, company_id } = req.driver;
+    const {
+      first_name, middle_name, last_name, dob, ssn, address, city, state, zip, phone, email,
+      address_history, license_history,
+      cdl_number, cdl_state, cdl_class, cdl_expiry, endorsements,
+      cdl_ever_denied, cdl_ever_suspended, cdl_denied_explanation,
+      driving_experience, accident_history, violation_history,
+      employment_history, cmv_employment,
+      no_employment_gaps, employment_gaps_explanation,
+      drug_alcohol_violation, drug_alcohol_explanation, dot_drug_test_consent,
+      certified_accurate, applicant_signature, cert_date,
+    } = req.body;
+
+    const full_name = [first_name, middle_name, last_name].filter(Boolean).join(' ');
+    const existing = await pool.query('SELECT id FROM driver_applications WHERE driver_id=$1', [driver_id]);
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    const vals = [
+      first_name, middle_name, last_name, full_name, dob, ssn,
+      address, city, state, zip, phone, email,
+      JSON.stringify(address_history || []),
+      JSON.stringify(license_history || []),
+      cdl_number, cdl_state, cdl_class, cdl_expiry, endorsements,
+      cdl_ever_denied, cdl_ever_suspended, cdl_denied_explanation,
+      JSON.stringify(driving_experience || []),
+      JSON.stringify(accident_history || []),
+      JSON.stringify(violation_history || []),
+      JSON.stringify(employment_history || []),
+      JSON.stringify(cmv_employment || []),
+      no_employment_gaps || false, employment_gaps_explanation || null,
+      drug_alcohol_violation, drug_alcohol_explanation, dot_drug_test_consent,
+      certified_accurate, applicant_signature || null, cert_date || null, ip,
+    ];
+
+    if (existing.rows.length > 0) {
+      const r = await pool.query(
+        `UPDATE driver_applications SET
+          first_name=$1, middle_name=$2, last_name=$3, full_name=$4, dob=$5, ssn=$6,
+          address=$7, city=$8, state=$9, zip=$10, phone=$11, email=$12,
+          address_history=$13, license_history=$14,
+          cdl_number=$15, cdl_state=$16, cdl_class=$17, cdl_expiry=$18, endorsements=$19,
+          cdl_ever_denied=$20, cdl_ever_suspended=$21, cdl_denied_explanation=$22,
+          driving_experience=$23, accident_history=$24, violation_history=$25,
+          employment_history=$26, cmv_employment=$27,
+          no_employment_gaps=$28, employment_gaps_explanation=$29,
+          drug_alcohol_violation=$30, drug_alcohol_explanation=$31, dot_drug_test_consent=$32,
+          certified_accurate=$33, applicant_signature=$34, cert_date=$35, certified_at=NOW(), ip_address=$36, submitted_at=NOW()
+         WHERE driver_id=$37 RETURNING *`,
+        [...vals, driver_id]
+      );
+      res.json(r.rows[0]);
+    } else {
+      const r = await pool.query(
+        `INSERT INTO driver_applications (
+          company_id, driver_id,
+          first_name, middle_name, last_name, full_name, dob, ssn,
+          address, city, state, zip, phone, email,
+          address_history, license_history,
+          cdl_number, cdl_state, cdl_class, cdl_expiry, endorsements,
+          cdl_ever_denied, cdl_ever_suspended, cdl_denied_explanation,
+          driving_experience, accident_history, violation_history,
+          employment_history, cmv_employment,
+          no_employment_gaps, employment_gaps_explanation,
+          drug_alcohol_violation, drug_alcohol_explanation, dot_drug_test_consent,
+          certified_accurate, applicant_signature, cert_date, certified_at, ip_address, submitted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,NOW(),$37,NOW())
+         RETURNING *`,
+        [company_id, driver_id, ...vals]
+      );
+      res.json(r.rows[0]);
+    }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Onboarding (public) ──
 app.post('/api/onboard', async (req, res) => {
   try {

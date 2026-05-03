@@ -12,10 +12,11 @@ import EmployeesView from './screens/EmployeesView';
 import SettingsView from './screens/SettingsView';
 import FleetMapView from './screens/FleetMapView';
 import IFTAReportView from './screens/IFTAReportView';
+import TrucksView from './screens/TrucksView';
 import DriverLoginPage from './screens/driver/DriverLoginPage';
 import DriverDashboard from './screens/driver/DriverDashboard';
 
-type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'settings';
+type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'settings';
 
 function DriverPortal() {
   const stored = localStorage.getItem('hf_driver');
@@ -64,6 +65,7 @@ function Inner() {
       {tab === 'invoices' && <InvoicesView />}
       {tab === 'shippers' && <ShippersView />}
       {tab === 'employees' && <EmployeesView />}
+      {tab === 'trucks' && <TrucksView />}
       {tab === 'fleet' && <FleetMapView />}
       {tab === 'ifta' && <IFTAReportView />}
       {tab === 'settings' && <SettingsView />}

@@ -281,6 +281,118 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- ── Trucks & Trailers ────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS trucks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  type VARCHAR(20) NOT NULL DEFAULT 'truck', -- truck | trailer
+  unit_number VARCHAR(50),
+  year INTEGER,
+  make VARCHAR(100),
+  model VARCHAR(100),
+  vin VARCHAR(50),
+  license_plate VARCHAR(50),
+  plate_state VARCHAR(10),
+  status VARCHAR(30) DEFAULT 'active', -- active | inactive | in_shop
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS maintenance_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  truck_id UUID REFERENCES trucks(id) ON DELETE CASCADE,
+  service_type VARCHAR(100) NOT NULL, -- Oil Change, DOT Inspection, Tire Rotation, etc.
+  service_date DATE NOT NULL,
+  odometer INTEGER,
+  cost DECIMAL(10,2),
+  vendor VARCHAR(255),
+  notes TEXT,
+  next_service_date DATE,
+  next_service_miles INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── Driver Qualification (DQ) File ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS driver_applications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
+
+  -- Section 1: Personal Info
+  first_name VARCHAR(100),
+  middle_name VARCHAR(100),
+  last_name VARCHAR(100),
+  full_name VARCHAR(255), -- derived: first + middle + last
+  dob DATE,
+  ssn VARCHAR(20), -- stored encrypted-at-rest recommended; required by FMCSA 391.21
+  address TEXT,
+  city VARCHAR(100),
+  state VARCHAR(50),
+  zip VARCHAR(20),
+  phone VARCHAR(50),
+  email VARCHAR(255),
+
+  -- Section 2: Address History (last 3 years)
+  address_history JSONB DEFAULT '[]', -- [{address, city, state, zip, from_date, to_date}]
+
+  -- Section 3: License History (all licenses held)
+  license_history JSONB DEFAULT '[]', -- [{license_number, state, license_type, class, issued, expiry}]
+  cdl_number VARCHAR(100), -- current CDL (for quick access)
+  cdl_state VARCHAR(10),
+  cdl_class VARCHAR(10),
+  cdl_expiry DATE,
+  endorsements TEXT,
+  cdl_ever_denied BOOLEAN DEFAULT false,
+  cdl_ever_suspended BOOLEAN DEFAULT false,
+  cdl_denied_explanation TEXT,
+
+  -- Section 4: Driving Experience
+  driving_experience JSONB DEFAULT '[]', -- [{vehicle_type, years, miles}]
+
+  -- Section 5: Accident Record (last 3 years)
+  accident_history JSONB DEFAULT '[]',
+
+  -- Section 6: Traffic Convictions (last 3 years)
+  violation_history JSONB DEFAULT '[]',
+
+  -- Section 7: Employment History (last 3 years)
+  employment_history JSONB DEFAULT '[]',
+
+  -- Section 8: CMV Employment (last 3 years — DOT-regulated driving jobs)
+  cmv_employment JSONB DEFAULT '[]',
+
+  -- Section 9: Employment Gaps (covers 10-year period)
+  no_employment_gaps BOOLEAN DEFAULT false,
+  employment_gaps_explanation TEXT, -- free text explanation of any gaps
+
+  -- Drug & Alcohol
+  drug_alcohol_violation BOOLEAN DEFAULT false,
+  drug_alcohol_explanation TEXT,
+  dot_drug_test_consent BOOLEAN DEFAULT false,
+
+  -- Section 10: Certification & Signature
+  certified_accurate BOOLEAN DEFAULT false,
+  applicant_signature VARCHAR(255), -- typed full name as electronic signature
+  cert_date VARCHAR(20),
+  certified_at TIMESTAMPTZ,
+  ip_address VARCHAR(50),
+
+  -- Admin-managed DQ documents (upload URLs)
+  mvr_url TEXT,
+  mvr_date DATE,
+  psp_url TEXT,
+  road_test_url TEXT,
+  pre_employment_drug_url TEXT,
+  previous_employer_verification_url TEXT,
+
+  submitted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_trucks_company ON trucks(company_id);
+CREATE INDEX IF NOT EXISTS idx_maintenance_truck ON maintenance_logs(truck_id);
+CREATE INDEX IF NOT EXISTS idx_dq_driver ON driver_applications(driver_id);
 CREATE INDEX IF NOT EXISTS idx_gps_events_driver ON gps_events(driver_id, recorded_at);
 CREATE INDEX IF NOT EXISTS idx_gps_events_load ON gps_events(load_id);
 CREATE INDEX IF NOT EXISTS idx_geofence_events_load ON geofence_events(load_id);
