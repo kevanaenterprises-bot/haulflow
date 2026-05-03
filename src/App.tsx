@@ -15,6 +15,7 @@ import IFTAReportView from './screens/IFTAReportView';
 import TrucksView from './screens/TrucksView';
 import DriverLoginPage from './screens/driver/DriverLoginPage';
 import DriverDashboard from './screens/driver/DriverDashboard';
+import PrivacyPolicyPage from './screens/PrivacyPolicyPage';
 
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'settings';
 
@@ -74,6 +75,10 @@ function Inner() {
 }
 
 export default function App() {
+  if (window.location.pathname === '/privacy') {
+    return <PrivacyPolicyPage />;
+  }
+
   // Detect driver portal before auth context loads — avoids any admin auth interference
   if (window.location.pathname.startsWith('/driver')) {
     return <DriverPortal />;
