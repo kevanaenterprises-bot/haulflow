@@ -6,6 +6,7 @@ import {
 import { api } from '../lib/api';
 import type { Invoice } from '../types';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
+import { DigitalTimeStamps } from './LoadsView';
 
 const METHOD_LABEL: Record<string, string> = {
   ach: 'ACH', cash: 'Cash', check: 'Check', wire: 'Wire',
@@ -432,6 +433,9 @@ function PaidInvoiceModal({ invoice, onClose }: { invoice: Invoice; onClose: () 
                 </tr>
               </tfoot>
             </table>
+
+            {/* Digital Time Stamps */}
+            <DigitalTimeStamps inv={inv} />
 
             {/* POD images */}
             {podUrls.length > 0 && (

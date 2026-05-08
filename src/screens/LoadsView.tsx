@@ -548,6 +548,55 @@ function Building2Icon() {
   return <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>;
 }
 
+export function DigitalTimeStamps({ inv }: { inv: any }) {
+  const fmt = (ts?: string | null) => {
+    if (!ts) return '—';
+    try {
+      return new Date(ts).toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+    } catch { return '—'; }
+  };
+  const hasAny = inv.shipper_in || inv.shipper_out || inv.receiver_in || inv.receiver_out;
+  return (
+    <div className="border-t pt-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs uppercase text-gray-500 font-bold tracking-wide">Digital Time Stamps</p>
+        <p className="text-xs text-gray-400">GPS-verified geofence events</p>
+      </div>
+      <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 text-left text-xs">
+              <th className="px-3 py-2 font-semibold text-gray-600">Stop</th>
+              <th className="px-3 py-2 font-semibold text-gray-600">Arrived (In)</th>
+              <th className="px-3 py-2 font-semibold text-gray-600">Departed (Out)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            <tr>
+              <td className="px-3 py-2 font-semibold text-gray-700">Shipper</td>
+              <td className="px-3 py-2 text-gray-700 font-mono text-xs">{fmt(inv.shipper_in)}</td>
+              <td className="px-3 py-2 text-gray-700 font-mono text-xs">{fmt(inv.shipper_out)}</td>
+            </tr>
+            <tr>
+              <td className="px-3 py-2 font-semibold text-gray-700">Receiver</td>
+              <td className="px-3 py-2 text-gray-700 font-mono text-xs">{fmt(inv.receiver_in)}</td>
+              <td className="px-3 py-2 text-gray-700 font-mono text-xs">{fmt(inv.receiver_out)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {!hasAny && (
+        <p className="text-xs text-gray-400 mt-1.5 italic">
+          No geofence events recorded — driver may not have crossed the geofence boundary, or location services were off.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function InvoicePreviewModal({ load, onClose }: { load: Load; onClose: () => void }) {
   const [inv, setInv] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -636,6 +685,10 @@ function InvoicePreviewModal({ load, onClose }: { load: Load; onClose: () => voi
                 </tr>
               </tfoot>
             </table>
+
+            {/* Digital Time Stamps */}
+            <DigitalTimeStamps inv={inv} />
+
             {inv.payment_terms && <p className="text-xs text-gray-400 text-center">Payment due within {inv.payment_terms} days. Thank you for your business.</p>}
             {inv.pod_url && (
               <div className="border-t pt-4">

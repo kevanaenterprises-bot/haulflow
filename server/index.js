@@ -805,10 +805,14 @@ app.get('/api/invoices/by-load/:loadId', authMiddleware, async (req, res) => {
     const r = await pool.query(
       `SELECT i.*, l.load_number, l.origin_city, l.origin_state, l.dest_city, l.dest_state, l.origin_address, l.dest_address,
               l.pickup_date, l.delivery_date, l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee, l.detention_fee,
-              l.bol_number, l.pod_url, l.pod_urls, l.cargo_description,
+              l.bol_number, l.pod_url, l.pod_urls, l.cargo_description, l.delivered_at,
               c.company_name as customer_name, c.email as customer_email, c.address as customer_address,
               comp.name as company_name_own, comp.phone as company_phone, comp.email as company_email_own,
-              comp.payment_terms
+              comp.payment_terms,
+              (SELECT MIN(recorded_at) FROM geofence_events WHERE load_id = l.id AND stop_type = 'pickup'   AND event_type = 'enter') AS shipper_in,
+              (SELECT MAX(recorded_at) FROM geofence_events WHERE load_id = l.id AND stop_type = 'pickup'   AND event_type = 'exit')  AS shipper_out,
+              (SELECT MIN(recorded_at) FROM geofence_events WHERE load_id = l.id AND stop_type = 'delivery' AND event_type = 'enter') AS receiver_in,
+              (SELECT MAX(recorded_at) FROM geofence_events WHERE load_id = l.id AND stop_type = 'delivery' AND event_type = 'exit')  AS receiver_out
        FROM invoices i
        JOIN loads l ON l.id = i.load_id
        LEFT JOIN customers c ON c.id = l.customer_id
@@ -1219,9 +1223,32 @@ async function createInvoiceForLoad(loadId) {
   await pool.query('UPDATE companies SET invoice_counter = invoice_counter + 1 WHERE id = $1', [load.company_id]);
 }
 
+async function fetchTimestamps(loadId) {
+  try {
+    const r = await pool.query(
+      `SELECT
+         (SELECT MIN(recorded_at) FROM geofence_events WHERE load_id=$1 AND stop_type='pickup'   AND event_type='enter') AS shipper_in,
+         (SELECT MAX(recorded_at) FROM geofence_events WHERE load_id=$1 AND stop_type='pickup'   AND event_type='exit')  AS shipper_out,
+         (SELECT MIN(recorded_at) FROM geofence_events WHERE load_id=$1 AND stop_type='delivery' AND event_type='enter') AS receiver_in,
+         (SELECT MAX(recorded_at) FROM geofence_events WHERE load_id=$1 AND stop_type='delivery' AND event_type='exit')  AS receiver_out`,
+      [loadId]
+    );
+    return r.rows[0] || {};
+  } catch { return {}; }
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  } catch { return '—'; }
+}
+
 async function buildInvoicePDF({ inv, comp, podImageBuffers }) {
   return new Promise(async (resolve, reject) => {
     try {
+      const ts = await fetchTimestamps(inv.load_id);
       const BLUE = '#2D5BA0';
       const doc = new PDFDocument({ margin: 40, size: 'LETTER' });
       const chunks = [];
@@ -1297,6 +1324,23 @@ async function buildInvoicePDF({ inv, comp, podImageBuffers }) {
       doc.rect(40, y + 4, 532, 24).fill(BLUE);
       doc.font('Helvetica-Bold').fontSize(11).fillColor('white').text('TOTAL DUE', 52, y + 10).text(`$${total.toFixed(2)}`, 52, y + 10, { width: 512, align: 'right' });
       y += 50;
+
+      // Digital Time Stamps
+      doc.rect(40, y, 532, 20).fill('#eee');
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('DIGITAL TIME STAMPS', 52, y + 5);
+      doc.font('Helvetica').fontSize(8).fillColor('#666').text('GPS-verified geofence events', 52, y + 5, { width: 512, align: 'right' });
+      y += 28;
+
+      const stampRow = (label, inTs, outTs) => {
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text(label, 52, y);
+        doc.font('Helvetica').fontSize(9).fillColor('#444')
+          .text(`In:  ${fmtTs(inTs)}`,  140, y)
+          .text(`Out: ${fmtTs(outTs)}`, 360, y);
+        y += 18;
+      };
+      stampRow('Shipper',  ts.shipper_in,  ts.shipper_out);
+      stampRow('Receiver', ts.receiver_in, ts.receiver_out);
+      y += 8;
 
       // Footer
       doc.font('Helvetica').fontSize(9).fillColor('#888').text(`Payment due within ${comp?.payment_terms || 30} days. Thank you for your business!`, 40, y);
