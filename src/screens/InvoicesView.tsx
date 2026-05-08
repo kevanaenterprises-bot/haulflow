@@ -235,7 +235,7 @@ function AuditModal({ audit, onClose }: { audit: any; onClose: () => void }) {
 
 function InvoiceBreakdown({ inv }: { inv: any }) {
   const [open, setOpen] = useState(false);
-  const hasBreakdown = inv.load_rate || inv.fuel_surcharge || inv.extra_stop_fee || inv.lumper_fee;
+  const hasBreakdown = inv.load_rate || inv.fuel_surcharge || inv.extra_stop_fee || inv.lumper_fee || inv.detention_fee;
 
   return (
     <div>
@@ -249,6 +249,7 @@ function InvoiceBreakdown({ inv }: { inv: any }) {
           {inv.fuel_surcharge && <div className="flex justify-between text-amber-700"><span>⛽ Fuel Surcharge{inv.miles ? ` (${inv.miles} mi)` : ''}</span><span className="font-medium">{formatCurrency(inv.fuel_surcharge)}</span></div>}
           {inv.extra_stop_fee && <div className="flex justify-between"><span className="text-gray-500">Extra Stop</span><span className="font-medium">{formatCurrency(inv.extra_stop_fee)}</span></div>}
           {inv.lumper_fee && <div className="flex justify-between"><span className="text-gray-500">Lumper</span><span className="font-medium">{formatCurrency(inv.lumper_fee)}</span></div>}
+          {inv.detention_fee && <div className="flex justify-between"><span className="text-gray-500">Detention</span><span className="font-medium">{formatCurrency(inv.detention_fee)}</span></div>}
           <div className="flex justify-between border-t pt-1 font-semibold"><span>Total</span><span>{formatCurrency(inv.amount)}</span></div>
         </div>
       )}

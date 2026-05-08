@@ -642,6 +642,7 @@ function InvoicePreviewModal({ load, onClose }: { load: Load; onClose: () => voi
                 {inv.fuel_surcharge > 0 && <tr><td className="py-2 px-3 text-gray-700">⛽ Fuel Surcharge{inv.miles ? ` (${inv.miles} mi)` : ''}</td><td className="py-2 px-3 text-right font-medium">{formatCurrency(inv.fuel_surcharge)}</td></tr>}
                 {inv.extra_stop_fee > 0 && <tr><td className="py-2 px-3 text-gray-700">Extra Stop Fee</td><td className="py-2 px-3 text-right font-medium">{formatCurrency(inv.extra_stop_fee)}</td></tr>}
                 {inv.lumper_fee > 0 && <tr><td className="py-2 px-3 text-gray-700">Lumper Fee</td><td className="py-2 px-3 text-right font-medium">{formatCurrency(inv.lumper_fee)}</td></tr>}
+                {inv.detention_fee > 0 && <tr><td className="py-2 px-3 text-gray-700">Detention Fee</td><td className="py-2 px-3 text-right font-medium">{formatCurrency(inv.detention_fee)}</td></tr>}
               </tbody>
               <tfoot>
                 <tr className="bg-brand-600 text-white">

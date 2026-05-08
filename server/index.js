@@ -619,7 +619,7 @@ app.post('/api/loads/:id/assign', authMiddleware, async (req, res) => {
 // ── Update load status (called by driver app) ──
 app.post('/api/loads/:id/status', async (req, res) => {
   try {
-    const { status, bol_number, extra_stop_fee, lumper_fee } = req.body;
+    const { status, bol_number, extra_stop_fee, lumper_fee, detention_fee, pod_url, pod_urls } = req.body;
     const allowed = ['DISPATCHED', 'IN_TRANSIT', 'DELIVERED', 'INVOICED', 'PAID'];
     if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
@@ -628,6 +628,9 @@ app.post('/api/loads/:id/status', async (req, res) => {
     if (bol_number) updates.bol_number = bol_number;
     if (extra_stop_fee != null) updates.extra_stop_fee = extra_stop_fee;
     if (lumper_fee != null) updates.lumper_fee = lumper_fee;
+    if (detention_fee != null) updates.detention_fee = detention_fee;
+    if (pod_url) updates.pod_url = pod_url;
+    if (pod_urls != null) updates.pod_urls = JSON.stringify(pod_urls);
 
     const fields = Object.keys(updates);
     const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
@@ -690,7 +693,7 @@ app.get('/api/invoices', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT i.*, l.load_number, l.origin_city, l.origin_state, l.dest_city, l.dest_state,
-              l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee,
+              l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee, l.detention_fee,
               c.company_name as customer_name
        FROM invoices i JOIN loads l ON l.id = i.load_id LEFT JOIN customers c ON c.id = l.customer_id
        WHERE i.company_id = $1 ORDER BY i.created_at DESC`,
@@ -801,8 +804,8 @@ app.get('/api/invoices/by-load/:loadId', authMiddleware, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT i.*, l.load_number, l.origin_city, l.origin_state, l.dest_city, l.dest_state, l.origin_address, l.dest_address,
-              l.pickup_date, l.delivery_date, l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee,
-              l.bol_number, l.pod_url, l.cargo_description,
+              l.pickup_date, l.delivery_date, l.rate as load_rate, l.miles, l.fuel_surcharge, l.extra_stop_fee, l.lumper_fee, l.detention_fee,
+              l.bol_number, l.pod_url, l.pod_urls, l.cargo_description,
               c.company_name as customer_name, c.email as customer_email, c.address as customer_address,
               comp.name as company_name_own, comp.phone as company_phone, comp.email as company_email_own,
               comp.payment_terms
@@ -1204,7 +1207,11 @@ async function createInvoiceForLoad(loadId) {
   const prefix = comp?.invoice_prefix || 'INV';
   const counter = comp?.invoice_counter || 1000;
   const invoiceNumber = `${prefix}${counter + 1}`;
-  const total = (parseFloat(load.rate) || 0) + (parseFloat(load.extra_stop_fee) || 0) + (parseFloat(load.lumper_fee) || 0);
+  const total = (parseFloat(load.rate) || 0)
+    + (parseFloat(load.fuel_surcharge) || 0)
+    + (parseFloat(load.extra_stop_fee) || 0)
+    + (parseFloat(load.lumper_fee) || 0)
+    + (parseFloat(load.detention_fee) || 0);
   await pool.query(
     'INSERT INTO invoices (company_id, load_id, invoice_number, amount) VALUES ($1,$2,$3,$4)',
     [load.company_id, loadId, invoiceNumber, total]
@@ -1276,11 +1283,17 @@ async function buildInvoicePDF({ inv, comp, podImageBuffers }) {
         y += 20;
       };
       row('Freight Charge', inv.rate);
+      row(`Fuel Surcharge${inv.miles ? ` (${inv.miles} mi)` : ''}`, inv.fuel_surcharge);
       row('Extra Stop Fee', inv.extra_stop_fee);
       row('Lumper Fee', inv.lumper_fee);
+      row('Detention Fee', inv.detention_fee);
 
       // Total
-      const total = (parseFloat(inv.rate) || 0) + (parseFloat(inv.extra_stop_fee) || 0) + (parseFloat(inv.lumper_fee) || 0);
+      const total = (parseFloat(inv.rate) || 0)
+        + (parseFloat(inv.fuel_surcharge) || 0)
+        + (parseFloat(inv.extra_stop_fee) || 0)
+        + (parseFloat(inv.lumper_fee) || 0)
+        + (parseFloat(inv.detention_fee) || 0);
       doc.rect(40, y + 4, 532, 24).fill(BLUE);
       doc.font('Helvetica-Bold').fontSize(11).fillColor('white').text('TOTAL DUE', 52, y + 10).text(`$${total.toFixed(2)}`, 52, y + 10, { width: 512, align: 'right' });
       y += 50;
