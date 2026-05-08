@@ -61,7 +61,7 @@ function Inner() {
 
   return (
     <AppLayout activeTab={tab} onTabChange={setTab}>
-      {tab === 'loads' && <LoadsView />}
+      {tab === 'loads' && <LoadsView onNavigate={(t) => setTab(t as Tab)} />}
       {tab === 'drivers' && <DriversView />}
       {tab === 'customers' && <CustomersView />}
       {tab === 'invoices' && <InvoicesView />}

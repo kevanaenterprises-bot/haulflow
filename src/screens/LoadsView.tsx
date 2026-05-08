@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, MapPin, Calendar, DollarSign, User, X, Download, Printer, ChevronDown, Truck, Clock, FileText, TrendingUp, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, MapPin, Calendar, DollarSign, User, X, Download, Printer, ChevronDown, ChevronRight, Truck, Clock, FileText, TrendingUp, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Load, LoadStatus, Driver, Customer } from '../types';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
@@ -15,7 +15,7 @@ const SECTIONS: { status: LoadStatus; label: string; sublabel: string; color: st
   { status: 'INVOICED',          label: 'Waiting on Payment',    sublabel: 'Invoice sent — awaiting payment',       color: 'text-emerald-700', border: 'border-emerald-300', icon: TrendingUp },
 ];
 
-export default function LoadsView() {
+export default function LoadsView({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const [loads, setLoads] = useState<Load[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -166,8 +166,8 @@ export default function LoadsView() {
           );
         })}
 
-        {/* Paid section */}
-        <PaidSection loads={paidLoads} onViewDetail={setDetailLoad} />
+        {/* Paid section — link out to dedicated page so this view stays lean */}
+        <PaidLoadsLink loads={paidLoads} onNavigate={() => onNavigate?.('paid')} />
       </div>
 
       {showCreate && (
@@ -368,12 +368,14 @@ function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail, onMarkPa
   );
 }
 
-function PaidSection({ loads, onViewDetail }: { loads: Load[]; onViewDetail: (l: Load) => void }) {
-  const [open, setOpen] = useState(false);
+function PaidLoadsLink({ loads, onNavigate }: { loads: Load[]; onNavigate: () => void }) {
   const total = loads.reduce((s, l) => s + (parseFloat(String(l.rate)) || 0), 0);
   return (
-    <div className="bg-white border border-green-200 rounded-xl overflow-hidden shadow-sm">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition">
+    <button
+      onClick={onNavigate}
+      className="w-full bg-white border border-green-200 rounded-xl overflow-hidden shadow-sm hover:bg-green-50 hover:border-green-300 transition"
+    >
+      <div className="flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center">
             <DollarSign className="w-4 h-4 text-green-600" />
@@ -383,32 +385,15 @@ function PaidSection({ loads, onViewDetail }: { loads: Load[]; onViewDetail: (l:
               <span className="font-semibold text-gray-900">Paid Loads</span>
               <span className="text-xs font-bold px-2 py-0.5 rounded-full text-green-700 bg-gray-100">{loads.length}</span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">View completed and paid loads</p>
+            <p className="text-xs text-gray-400 mt-0.5">Open the Paid Invoices page</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {total > 0 && <span className="text-sm font-semibold text-green-600">{formatCurrency(total)}</span>}
-          <ChevronDown className={cn('w-4 h-4 text-gray-400 transition-transform', open && 'rotate-180')} />
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </div>
-      </button>
-      {open && loads.length > 0 && (
-        <div className="border-t border-gray-100 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {loads.map(l => (
-            <button key={l.id} onClick={() => onViewDetail(l)} className="bg-gray-50 rounded-xl border border-gray-100 p-3 text-xs text-gray-500 text-left hover:bg-green-50 hover:border-green-200 transition w-full">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-gray-700">#{l.load_number}</span>
-                {l.rate && <span className="font-semibold text-green-600">{formatCurrency(l.rate)}</span>}
-              </div>
-              {l.customer_name && <p className="truncate">{l.customer_name}</p>}
-              {(l.origin_city || l.dest_city) && (
-                <p className="text-gray-400 mt-0.5">{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</p>
-              )}
-              <p className="text-brand-500 font-medium mt-1.5">View Details →</p>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      </div>
+    </button>
   );
 }
 

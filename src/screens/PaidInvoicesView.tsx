@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle, Search, X, Download, Printer, FileText, MapPin, DollarSign, Calendar,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Invoice } from '../types';
@@ -23,6 +24,8 @@ export default function PaidInvoicesView() {
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [viewing, setViewing] = useState<Invoice | null>(null);
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
 
   const fetchAll = async () => {
     try {
@@ -58,6 +61,14 @@ export default function PaidInvoicesView() {
       return fields.some(f => f.includes(q));
     });
   }, [paid, search, methodFilter]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [search, methodFilter, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const pageRows = filtered.slice(startIdx, startIdx + pageSize);
 
   const totalCollected = paid.reduce((s, i) => s + (parseFloat(String(i.amount_paid ?? i.amount)) || 0), 0);
 
@@ -142,7 +153,7 @@ export default function PaidInvoicesView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map(inv => {
+                {pageRows.map(inv => {
                   const method = (inv.payment_method || '').toLowerCase();
                   return (
                     <tr key={inv.id} className="hover:bg-gray-50 transition">
@@ -191,6 +202,49 @@ export default function PaidInvoicesView() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination footer */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50 text-sm">
+            <div className="flex items-center gap-3 text-gray-500">
+              <span>
+                Showing <span className="font-semibold text-gray-900">{startIdx + 1}</span>–
+                <span className="font-semibold text-gray-900">{Math.min(startIdx + pageSize, filtered.length)}</span>
+                {' '}of <span className="font-semibold text-gray-900">{filtered.length}</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500">Per page</label>
+                <select
+                  value={pageSize}
+                  onChange={e => setPageSize(parseInt(e.target.value, 10))}
+                  className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft className="w-4 h-4" /> Prev
+              </button>
+              <span className="px-3 text-gray-600">
+                Page <span className="font-semibold text-gray-900">{safePage}</span> of <span className="font-semibold text-gray-900">{totalPages}</span>
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                Next <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
