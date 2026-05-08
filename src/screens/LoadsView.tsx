@@ -247,6 +247,7 @@ function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail, onMarkPa
         <div className="flex items-center gap-2">
           <Truck className="w-3.5 h-3.5 text-gray-400" />
           <span className="font-bold text-gray-900 text-sm">#{load.load_number}</span>
+          <GeofenceDot load={load} />
         </div>
         <button onClick={handleDelete} disabled={deleting} className="text-gray-200 hover:text-red-400 transition p-1 -mr-1">
           <Trash2 className="w-3.5 h-3.5" />
@@ -397,7 +398,7 @@ function PaidLoadsLink({ loads, onNavigate }: { loads: Load[]; onNavigate: () =>
   );
 }
 
-function LoadDetailModal({ load, onClose }: { load: Load; onClose: () => void; onRefresh: () => void }) {
+function LoadDetailModal({ load, onClose, onRefresh }: { load: Load; onClose: () => void; onRefresh: () => void }) {
   const STATUS_LABELS: Record<string, string> = {
     WAITING_DISPATCH: 'Waiting on Dispatch', DISPATCHED: 'Dispatched', IN_TRANSIT: 'In Transit',
     WAITING_INVOICING: 'Waiting on Invoice', INVOICED: 'Waiting on Payment', PAID: 'Paid',
@@ -501,6 +502,9 @@ function LoadDetailModal({ load, onClose }: { load: Load; onClose: () => void; o
             </div>
           )}
 
+          {/* Geofence coverage */}
+          <GeofencePanel load={load} onChanged={onRefresh} />
+
           {/* POD images */}
           {podUrls.length > 0 && (
             <div>
@@ -546,6 +550,159 @@ function LoadDetailModal({ load, onClose }: { load: Load; onClose: () => void; o
 
 function Building2Icon() {
   return <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H5m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>;
+}
+
+// Small dot showing geofence coverage at-a-glance on a card.
+// Both set → green, partial → amber, neither → red
+function GeofenceDot({ load }: { load: Load }) {
+  const hasShipper = load.shipper_lat != null && load.shipper_lng != null;
+  const hasReceiver = load.receiver_lat != null && load.receiver_lng != null;
+  let color = 'bg-red-500';
+  let title = 'No geofence — neither shipper nor receiver coordinates set';
+  if (hasShipper && hasReceiver)      { color = 'bg-green-500'; title = 'Geofence active for both shipper and receiver'; }
+  else if (hasShipper || hasReceiver) { color = 'bg-amber-500'; title = `Geofence partial — ${hasShipper ? 'receiver' : 'shipper'} coordinates missing`; }
+  return (
+    <span className="relative inline-flex items-center" title={title}>
+      <span className={cn('inline-block w-2 h-2 rounded-full', color)} />
+    </span>
+  );
+}
+
+export function GeofencePanel({ load, onChanged }: { load: Load; onChanged: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState<'shipper' | 'receiver' | null>(null);
+  const [latDraft, setLatDraft] = useState('');
+  const [lngDraft, setLngDraft] = useState('');
+  const [error, setError] = useState('');
+
+  const hasShipper = load.shipper_lat != null && load.shipper_lng != null;
+  const hasReceiver = load.receiver_lat != null && load.receiver_lng != null;
+
+  const regen = async (side: 'shipper' | 'receiver') => {
+    setBusy(side);
+    setError('');
+    try {
+      await api.post(`/api/loads/${load.id}/regenerate-geofence`, { side });
+      onChanged();
+    } catch (e: any) { setError(e.message); }
+    setBusy(null);
+  };
+
+  const startEdit = (side: 'shipper' | 'receiver') => {
+    const lat = side === 'shipper' ? load.shipper_lat : load.receiver_lat;
+    const lng = side === 'shipper' ? load.shipper_lng : load.receiver_lng;
+    setLatDraft(lat != null ? String(lat) : '');
+    setLngDraft(lng != null ? String(lng) : '');
+    setEditing(side);
+    setError('');
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    const lat = parseFloat(latDraft);
+    const lng = parseFloat(lngDraft);
+    if (isNaN(lat) || lat < -90 || lat > 90)   { setError('Latitude must be between -90 and 90'); return; }
+    if (isNaN(lng) || lng < -180 || lng > 180) { setError('Longitude must be between -180 and 180'); return; }
+    setBusy(editing);
+    setError('');
+    try {
+      const body: any = {};
+      if (editing === 'shipper')  { body.shipper_lat = lat;  body.shipper_lng = lng; }
+      else                        { body.receiver_lat = lat; body.receiver_lng = lng; }
+      await api.patch(`/api/loads/${load.id}`, body);
+      setEditing(null);
+      onChanged();
+    } catch (e: any) { setError(e.message); }
+    setBusy(null);
+  };
+
+  const Row = ({ side, label, lat, lng, has }: { side: 'shipper' | 'receiver'; label: string; lat?: any; lng?: any; has: boolean }) => (
+    <div className="border border-gray-200 rounded-xl p-3 bg-white">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className={cn('w-2 h-2 rounded-full', has ? 'bg-green-500' : 'bg-red-500')} />
+          <span className="font-semibold text-sm text-gray-800">{label}</span>
+          <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', has ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700')}>
+            {has ? 'Geofenced' : 'Not set'}
+          </span>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => regen(side)}
+            disabled={busy === side}
+            className="text-xs px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium transition disabled:opacity-50"
+          >
+            {busy === side && editing !== side ? '…' : 'Regenerate'}
+          </button>
+          <button
+            onClick={() => startEdit(side)}
+            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
+          >
+            Edit coords
+          </button>
+        </div>
+      </div>
+      {editing === side ? (
+        <div className="space-y-2 pt-1">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Latitude</label>
+              <input
+                value={latDraft}
+                onChange={e => setLatDraft(e.target.value)}
+                placeholder="e.g. 33.0198"
+                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Longitude</label>
+              <input
+                value={lngDraft}
+                onChange={e => setLngDraft(e.target.value)}
+                placeholder="e.g. -96.6989"
+                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancel</button>
+            <button
+              onClick={saveEdit}
+              disabled={busy === side}
+              className="text-xs bg-brand-500 hover:bg-brand-600 text-white px-3 py-1 rounded font-medium transition disabled:opacity-50"
+            >
+              {busy === side ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            Tip: copy "lat, lng" from Google Maps (right-click any location → first item in menu).
+          </p>
+        </div>
+      ) : (
+        has ? (
+          <p className="text-xs font-mono text-gray-500">
+            {parseFloat(String(lat)).toFixed(5)}, {parseFloat(String(lng)).toFixed(5)}
+          </p>
+        ) : (
+          <p className="text-xs text-gray-400 italic">Driver app cannot trip a geofence here. Click Regenerate or Edit coords.</p>
+        )
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs uppercase text-gray-500 font-bold tracking-wide">Geofence Coverage</p>
+        <p className="text-xs text-gray-400">300m radius default</p>
+      </div>
+      <div className="space-y-2">
+        <Row side="shipper"  label="Shipper"  lat={load.shipper_lat}  lng={load.shipper_lng}  has={hasShipper} />
+        <Row side="receiver" label="Receiver" lat={load.receiver_lat} lng={load.receiver_lng} has={hasReceiver} />
+      </div>
+      {error && <p className="text-xs text-red-600 bg-red-50 px-2 py-1.5 rounded mt-2">{error}</p>}
+    </div>
+  );
 }
 
 export function DigitalTimeStamps({ inv }: { inv: any }) {

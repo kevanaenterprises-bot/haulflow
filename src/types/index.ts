@@ -116,6 +116,12 @@ export interface Load {
   customer_name?: string;
   invoice_number?: string;
   pod_url?: string;
+  shipper_lat?: number | string | null;
+  shipper_lng?: number | string | null;
+  receiver_lat?: number | string | null;
+  receiver_lng?: number | string | null;
+  geofence_radius?: number;
+  detention_fee?: number;
 }
 
 export type PaymentMethod = 'ach' | 'cash' | 'check' | 'wire';

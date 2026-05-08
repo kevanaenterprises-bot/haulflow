@@ -380,17 +380,20 @@ app.post('/api/loads', authMiddleware, async (req, res) => {
 app.patch('/api/loads/:id', authMiddleware, async (req, res) => {
   try {
     const body = { ...req.body };
-    // Re-geocode if any address fields changed
+    // If manual coordinate overrides are provided, accept them as-is and skip auto-geocoding for that side
+    const manualShipper = body.shipper_lat !== undefined || body.shipper_lng !== undefined;
+    const manualReceiver = body.receiver_lat !== undefined || body.receiver_lng !== undefined;
+    // Re-geocode if any address fields changed (and no manual override for that side)
     const originFields = ['origin_address','origin_city','origin_state'];
     const destFields = ['dest_address','dest_city','dest_state'];
-    if (originFields.some(f => f in body)) {
+    if (!manualShipper && originFields.some(f => f in body)) {
       // Fetch current to fill missing pieces
       const cur = await pool.query('SELECT origin_address,origin_city,origin_state FROM loads WHERE id=$1', [req.params.id]);
       const c = cur.rows[0] || {};
       const geo = await geocodeAddress(body.origin_address??c.origin_address, body.origin_city??c.origin_city, body.origin_state??c.origin_state);
       if (geo) { body.shipper_lat = geo.lat; body.shipper_lng = geo.lng; }
     }
-    if (destFields.some(f => f in body)) {
+    if (!manualReceiver && destFields.some(f => f in body)) {
       const cur = await pool.query('SELECT dest_address,dest_city,dest_state FROM loads WHERE id=$1', [req.params.id]);
       const c = cur.rows[0] || {};
       const geo = await geocodeAddress(body.dest_address??c.dest_address, body.dest_city??c.dest_city, body.dest_state??c.dest_state);
@@ -407,6 +410,48 @@ app.patch('/api/loads/:id', authMiddleware, async (req, res) => {
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Load not found' });
     res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Regenerate geofence coordinates for a load — re-runs geocoding for shipper, receiver, or both
+app.post('/api/loads/:id/regenerate-geofence', authMiddleware, async (req, res) => {
+  try {
+    const { side } = req.body; // 'shipper' | 'receiver' | undefined (both)
+    const cur = await pool.query(
+      `SELECT origin_address, origin_city, origin_state, dest_address, dest_city, dest_state
+       FROM loads WHERE id=$1 AND company_id=$2`,
+      [req.params.id, req.user.company_id]
+    );
+    const load = cur.rows[0];
+    if (!load) return res.status(404).json({ error: 'Load not found' });
+
+    const updates = {};
+    if (!side || side === 'shipper') {
+      const geo = await geocodeAddress(load.origin_address, load.origin_city, load.origin_state);
+      if (geo) { updates.shipper_lat = geo.lat; updates.shipper_lng = geo.lng; }
+      else if (side === 'shipper') {
+        return res.status(422).json({ error: 'Could not geocode shipper address. Check the address or set coordinates manually.' });
+      }
+    }
+    if (!side || side === 'receiver') {
+      const geo = await geocodeAddress(load.dest_address, load.dest_city, load.dest_state);
+      if (geo) { updates.receiver_lat = geo.lat; updates.receiver_lng = geo.lng; }
+      else if (side === 'receiver') {
+        return res.status(422).json({ error: 'Could not geocode receiver address. Check the address or set coordinates manually.' });
+      }
+    }
+
+    const fields = Object.keys(updates);
+    if (!fields.length) {
+      return res.status(422).json({ error: 'Could not geocode either address. Check the addresses or set coordinates manually.' });
+    }
+    const sets = fields.map((f, i) => `${f} = $${i + 2}`).join(', ');
+    const values = fields.map(f => updates[f]);
+    const result = await pool.query(
+      `UPDATE loads SET ${sets} WHERE id = $1 AND company_id = $${fields.length + 2} RETURNING shipper_lat, shipper_lng, receiver_lat, receiver_lng`,
+      [req.params.id, ...values, req.user.company_id]
+    );
+    res.json({ ok: true, ...result.rows[0] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
