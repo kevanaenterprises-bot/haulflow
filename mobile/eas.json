@@ -15,7 +15,13 @@
     },
     "production": {
       "autoIncrement": true,
-      "ios": { "resourceClass": "m-medium" }
+      "ios": {
+        "resourceClass": "m-medium",
+        "image": "latest"
+      },
+      "android": {
+        "image": "latest"
+      }
     }
   },
   "submit": {
