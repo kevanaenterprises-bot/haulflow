@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "d6077218-f73d-4bbc-b7d8-41cd0e4cc35d"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.dallasowen.haulflow",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "HaulFlow uses the camera so drivers can capture proof-of-delivery (POD) and bill-of-lading (BOL) photos at pickup and drop-off.",
+        "NSPhotoLibraryUsageDescription": "HaulFlow accesses your photo library so drivers can attach existing POD or BOL photos to a load.",
+        "NSPhotoLibraryAddUsageDescription": "HaulFlow saves POD and BOL photos to your photo library when requested.",
+        "NSLocationWhenInUseUsageDescription": "HaulFlow uses your location to show your truck on the fleet map and to record GPS pings during active loads.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "HaulFlow uses your location in the background to keep your truck position updated on the fleet map while a load is active."
+      }
+    },
+    "android": {
+      "package": "com.dallasowen.haulflow",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET"
+      ]
+    }
+  }
+}
