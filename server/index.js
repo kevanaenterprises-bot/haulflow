@@ -55,6 +55,11 @@ function authMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Invalid token' });
+  // Admin endpoints reject driver tokens. Admin tokens have `id`; driver tokens have `driver_id`.
+  // This prevents a driver from using their token to call admin APIs (vertical privilege escalation).
+  if (payload.driver_id || !payload.id) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   req.user = payload;
   next();
 }
@@ -910,6 +915,10 @@ app.get('/api/invoices/:id/pdf', async (req, res) => {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Invalid token' });
+  // Same admin-only gate as authMiddleware — drivers shouldn't pull invoice PDFs
+  if (payload.driver_id || !payload.id) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   req.user = payload;
   try {
     const invRes = await pool.query(
