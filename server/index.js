@@ -702,10 +702,43 @@ app.get('/api/invoices', authMiddleware, async (req, res) => {
 
 app.patch('/api/invoices/:id/pay', authMiddleware, async (req, res) => {
   try {
-    const { payment_method } = req.body;
+    const { payment_method, amount_paid, check_number, check_date } = req.body;
+    const method = (payment_method || 'check').toString().toLowerCase();
+    const allowed = ['ach', 'cash', 'check', 'wire'];
+    if (!allowed.includes(method)) {
+      return res.status(400).json({ error: 'payment_method must be one of: ach, cash, check, wire' });
+    }
+    const amt = amount_paid !== undefined && amount_paid !== null && amount_paid !== ''
+      ? parseFloat(amount_paid)
+      : null;
+    if (amt !== null && (isNaN(amt) || amt < 0)) {
+      return res.status(400).json({ error: 'amount_paid must be a non-negative number' });
+    }
+    if (method === 'check') {
+      if (!check_number || !String(check_number).trim()) {
+        return res.status(400).json({ error: 'check_number required when payment_method is check' });
+      }
+      if (!check_date) {
+        return res.status(400).json({ error: 'check_date required when payment_method is check' });
+      }
+    }
     const result = await pool.query(
-      `UPDATE invoices SET status = 'PAID', paid_at = NOW(), payment_method = $1 WHERE id = $2 AND company_id = $3 RETURNING *`,
-      [payment_method || 'check', req.params.id, req.user.company_id]
+      `UPDATE invoices
+       SET status = 'PAID',
+           paid_at = NOW(),
+           payment_method = $1,
+           amount_paid = $2,
+           check_number = $3,
+           check_date = $4
+       WHERE id = $5 AND company_id = $6 RETURNING *`,
+      [
+        method,
+        amt,
+        method === 'check' ? String(check_number).trim() : null,
+        method === 'check' ? check_date : null,
+        req.params.id,
+        req.user.company_id,
+      ]
     );
     // Mark load as PAID too
     if (result.rows[0]) {

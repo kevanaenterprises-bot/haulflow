@@ -5,6 +5,7 @@ import type { Load, LoadStatus, Driver, Customer } from '../types';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
 import CreateLoadModal from '../components/tms/CreateLoadModal';
 import AssignDriverModal from '../components/tms/AssignDriverModal';
+import MarkPaidModal from '../components/tms/MarkPaidModal';
 
 const SECTIONS: { status: LoadStatus; label: string; sublabel: string; color: string; border: string; icon: React.ElementType }[] = [
   { status: 'WAITING_DISPATCH',  label: 'Waiting on Dispatch',  sublabel: 'Loads that need a driver assigned',      color: 'text-amber-700',   border: 'border-amber-300',   icon: Clock },
@@ -24,6 +25,7 @@ export default function LoadsView() {
   const [assignLoad, setAssignLoad] = useState<Load | null>(null);
   const [previewLoad, setPreviewLoad] = useState<Load | null>(null);
   const [detailLoad, setDetailLoad] = useState<Load | null>(null);
+  const [payLoad, setPayLoad] = useState<Load | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const fetchAll = async (silent = false) => {
@@ -153,6 +155,7 @@ export default function LoadsView() {
                           onRefresh={() => fetchAll(true)}
                           onPreview={() => setPreviewLoad(load)}
                           onViewDetail={() => setDetailLoad(load)}
+                          onMarkPaid={() => setPayLoad(load)}
                         />
                       ))}
                     </div>
@@ -179,6 +182,9 @@ export default function LoadsView() {
       {detailLoad && (
         <LoadDetailModal load={detailLoad} onClose={() => setDetailLoad(null)} onRefresh={() => { setDetailLoad(null); fetchAll(true); }} />
       )}
+      {payLoad && (
+        <MarkPaidModal load={payLoad} onClose={() => setPayLoad(null)} onPaid={() => { setPayLoad(null); fetchAll(true); }} />
+      )}
     </div>
   );
 }
@@ -198,7 +204,7 @@ function StatCard({ label, value, sub, icon: Icon, iconBg, iconColor }: { label:
   );
 }
 
-function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail }: { load: Load; onAssign: () => void; onRefresh: () => void; onPreview: () => void; onViewDetail: () => void }) {
+function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail, onMarkPaid }: { load: Load; onAssign: () => void; onRefresh: () => void; onPreview: () => void; onViewDetail: () => void; onMarkPaid: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [editingInvNum, setEditingInvNum] = useState(false);
@@ -347,9 +353,14 @@ function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail }: { load
             </button>
           )}
           {load.status === 'INVOICED' && (
-            <button onClick={onPreview} className="flex-1 text-xs bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg font-medium transition">
-              View Invoice
-            </button>
+            <>
+              <button onClick={onPreview} className="flex-1 text-xs bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded-lg font-medium transition">
+                View Invoice
+              </button>
+              <button onClick={onMarkPaid} className="flex-1 text-xs bg-green-600 hover:bg-green-700 text-white py-1.5 rounded-lg font-medium transition">
+                Paid
+              </button>
+            </>
           )}
         </div>
       </div>

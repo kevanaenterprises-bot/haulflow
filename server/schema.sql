@@ -179,6 +179,16 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='driver_notes') THEN
     ALTER TABLE loads ADD COLUMN driver_notes TEXT;
   END IF;
+  -- Payment tracking columns on invoices
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='amount_paid') THEN
+    ALTER TABLE invoices ADD COLUMN amount_paid DECIMAL(10,2);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='check_number') THEN
+    ALTER TABLE invoices ADD COLUMN check_number VARCHAR(100);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='check_date') THEN
+    ALTER TABLE invoices ADD COLUMN check_date DATE;
+  END IF;
 END $$;
 
 CREATE TABLE IF NOT EXISTS fuel_purchases (

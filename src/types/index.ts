@@ -118,6 +118,8 @@ export interface Load {
   pod_url?: string;
 }
 
+export type PaymentMethod = 'ach' | 'cash' | 'check' | 'wire';
+
 export interface Invoice {
   id: string;
   company_id: string;
@@ -126,7 +128,10 @@ export interface Invoice {
   amount: number;
   status: 'UNPAID' | 'PAID';
   paid_at?: string;
-  payment_method?: string;
+  payment_method?: PaymentMethod | string;
+  amount_paid?: number;
+  check_number?: string;
+  check_date?: string;
   created_at?: string;
   load?: Load;
 }
