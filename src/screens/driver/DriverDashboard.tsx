@@ -42,8 +42,8 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
   const [returning, setReturning] = useState(false);
   const [error, setError] = useState('');
 
-  // Road Tour — historical markers
-  const [tourActive, setTourActive] = useState(false);
+  // Road Tour — historical markers (persisted across page refresh)
+  const [tourActive, setTourActive] = useState<boolean>(() => localStorage.getItem('hf_tour_active') === '1');
   const [tourMarker, setTourMarker] = useState<{ title: string; summary: string } | null>(null);
   const tourWatchRef = useRef<number | null>(null);
   const announcedRef = useRef<Set<string>>(new Set());
@@ -132,18 +132,19 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
     } catch { /* silent fail — no disruption to driver */ }
   }, [speak]);
 
-  const startTour = () => {
+  // Internal start — used by both the button click and the auto-resume effect.
+  // `announce` controls whether the activation phrase is spoken (silent on auto-resume).
+  const beginTourWatch = useCallback((announce: boolean) => {
     if (!navigator.geolocation) {
-      speak('Location services are not available on this device.');
-      return;
+      if (announce) speak('Location services are not available on this device.');
+      return false;
     }
-    setTourActive(true);
+    if (tourWatchRef.current !== null) return true; // already watching
     announcedRef.current = new Set();
-    speak('Road Tour activated. Historical markers along your route will be announced.');
+    if (announce) speak('Road Tour activated. Historical markers along your route will be announced.');
     tourWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
-        // Only re-fetch if moved more than ~0.5 miles
         const last = lastFetchRef.current;
         const distMoved = last ? Math.hypot(lat - last.lat, lng - last.lng) : 999;
         if (distMoved > 0.007) {
@@ -154,6 +155,13 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
       () => { /* location error — silent */ },
       { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 }
     );
+    return true;
+  }, [fetchNearbyMarkers, speak]);
+
+  const startTour = () => {
+    if (!beginTourWatch(true)) return;
+    setTourActive(true);
+    localStorage.setItem('hf_tour_active', '1');
   };
 
   const stopTour = () => {
@@ -163,12 +171,106 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
     }
     setTourActive(false);
     setTourMarker(null);
+    localStorage.removeItem('hf_tour_active');
     speak('Road Tour stopped.');
   };
+
+  // Auto-resume the tour after a page refresh if it was active before.
+  useEffect(() => {
+    if (tourActive && tourWatchRef.current === null) {
+      beginTourWatch(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => () => {
     if (tourWatchRef.current !== null) navigator.geolocation.clearWatch(tourWatchRef.current);
   }, []);
+
+  // ────────────────────────────────────────────────────────────────────────
+  // GEOFENCE DETECTION — fires enter/exit events when driver crosses the
+  // shipper or receiver geofence on the active load. Server records timestamps.
+  // ────────────────────────────────────────────────────────────────────────
+  const geofenceWatchRef = useRef<number | null>(null);
+  // Track which stops the driver is currently *inside* so we only fire on transitions
+  const insideRef = useRef<{ shipper: boolean; receiver: boolean }>({ shipper: false, receiver: false });
+
+  useEffect(() => {
+    // Tear down any previous watcher when the active load changes
+    if (geofenceWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(geofenceWatchRef.current);
+      geofenceWatchRef.current = null;
+    }
+    insideRef.current = { shipper: false, receiver: false };
+
+    if (!load) return;
+    if (!['DISPATCHED', 'IN_TRANSIT'].includes(load.status)) return;
+    const sLat = load.shipper_lat  != null ? parseFloat(load.shipper_lat)  : null;
+    const sLng = load.shipper_lng  != null ? parseFloat(load.shipper_lng)  : null;
+    const rLat = load.receiver_lat != null ? parseFloat(load.receiver_lat) : null;
+    const rLng = load.receiver_lng != null ? parseFloat(load.receiver_lng) : null;
+    if ((sLat == null || sLng == null) && (rLat == null || rLng == null)) return; // nothing to watch
+    if (!navigator.geolocation) return;
+
+    const radiusMeters = parseFloat(load.geofence_radius) || 300;
+
+    // Haversine distance in meters between two lat/lng pairs
+    const distMeters = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+      const R = 6371000;
+      const toRad = (d: number) => d * Math.PI / 180;
+      const dLat = toRad(bLat - aLat);
+      const dLng = toRad(bLng - aLng);
+      const a = Math.sin(dLat/2)**2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng/2)**2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    };
+
+    const post = (stop_type: 'pickup' | 'delivery', event_type: 'enter' | 'exit', lat: number, lng: number) => {
+      driverApi('/api/driver/geofence', 'POST', {
+        load_id: load.id,
+        stop_id: stop_type,
+        stop_type,
+        event_type,
+        lat,
+        lng,
+      }).catch(() => { /* silent — server dedupes; transient failures retried on next pulse */ });
+    };
+
+    geofenceWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+
+        if (sLat != null && sLng != null) {
+          const inside = distMeters(lat, lng, sLat, sLng) <= radiusMeters;
+          if (inside && !insideRef.current.shipper) {
+            insideRef.current.shipper = true;
+            post('pickup', 'enter', lat, lng);
+          } else if (!inside && insideRef.current.shipper) {
+            insideRef.current.shipper = false;
+            post('pickup', 'exit', lat, lng);
+          }
+        }
+        if (rLat != null && rLng != null) {
+          const inside = distMeters(lat, lng, rLat, rLng) <= radiusMeters;
+          if (inside && !insideRef.current.receiver) {
+            insideRef.current.receiver = true;
+            post('delivery', 'enter', lat, lng);
+          } else if (!inside && insideRef.current.receiver) {
+            insideRef.current.receiver = false;
+            post('delivery', 'exit', lat, lng);
+          }
+        }
+      },
+      () => { /* GPS error — silent, retried automatically */ },
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
+    );
+
+    return () => {
+      if (geofenceWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(geofenceWatchRef.current);
+        geofenceWatchRef.current = null;
+      }
+    };
+  }, [load?.id, load?.status, load?.shipper_lat, load?.shipper_lng, load?.receiver_lat, load?.receiver_lng, load?.geofence_radius]);
 
   if (loading) {
     return (

@@ -568,6 +568,101 @@ function GeofenceDot({ load }: { load: Load }) {
   );
 }
 
+// Single row in the geofence panel. Defined OUTSIDE GeofencePanel so React doesn't
+// remount the input (and lose focus) every time the parent's state changes on keystroke.
+function GeofenceRow({
+  side, label, lat, lng, has, busy, editing,
+  latDraft, lngDraft, setLatDraft, setLngDraft,
+  onRegen, onStartEdit, onSave, onCancel,
+}: {
+  side: 'shipper' | 'receiver';
+  label: string;
+  lat?: any; lng?: any; has: boolean;
+  busy: string | null;
+  editing: 'shipper' | 'receiver' | null;
+  latDraft: string; lngDraft: string;
+  setLatDraft: (v: string) => void;
+  setLngDraft: (v: string) => void;
+  onRegen: () => void;
+  onStartEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="border border-gray-200 rounded-xl p-3 bg-white">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-2">
+          <span className={cn('w-2 h-2 rounded-full', has ? 'bg-green-500' : 'bg-red-500')} />
+          <span className="font-semibold text-sm text-gray-800">{label}</span>
+          <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', has ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700')}>
+            {has ? 'Geofenced' : 'Not set'}
+          </span>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={onRegen}
+            disabled={busy === side}
+            className="text-xs px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium transition disabled:opacity-50"
+          >
+            {busy === side && editing !== side ? '…' : 'Regenerate'}
+          </button>
+          <button
+            onClick={onStartEdit}
+            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
+          >
+            Edit coords
+          </button>
+        </div>
+      </div>
+      {editing === side ? (
+        <div className="space-y-2 pt-1">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Latitude</label>
+              <input
+                value={latDraft}
+                onChange={e => setLatDraft(e.target.value)}
+                placeholder="e.g. 33.0198"
+                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Longitude</label>
+              <input
+                value={lngDraft}
+                onChange={e => setLngDraft(e.target.value)}
+                placeholder="e.g. -96.6989"
+                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={onCancel} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancel</button>
+            <button
+              onClick={onSave}
+              disabled={busy === side}
+              className="text-xs bg-brand-500 hover:bg-brand-600 text-white px-3 py-1 rounded font-medium transition disabled:opacity-50"
+            >
+              {busy === side ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">
+            Tip: copy "lat, lng" from Google Maps (right-click any location → first item in menu).
+          </p>
+        </div>
+      ) : (
+        has ? (
+          <p className="text-xs font-mono text-gray-500">
+            {parseFloat(String(lat)).toFixed(5)}, {parseFloat(String(lng)).toFixed(5)}
+          </p>
+        ) : (
+          <p className="text-xs text-gray-400 italic">Driver app cannot trip a geofence here. Click Regenerate or Edit coords.</p>
+        )
+      )}
+    </div>
+  );
+}
+
 export function GeofencePanel({ load, onChanged }: { load: Load; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<'shipper' | 'receiver' | null>(null);
@@ -616,80 +711,6 @@ export function GeofencePanel({ load, onChanged }: { load: Load; onChanged: () =
     setBusy(null);
   };
 
-  const Row = ({ side, label, lat, lng, has }: { side: 'shipper' | 'receiver'; label: string; lat?: any; lng?: any; has: boolean }) => (
-    <div className="border border-gray-200 rounded-xl p-3 bg-white">
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <span className={cn('w-2 h-2 rounded-full', has ? 'bg-green-500' : 'bg-red-500')} />
-          <span className="font-semibold text-sm text-gray-800">{label}</span>
-          <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', has ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700')}>
-            {has ? 'Geofenced' : 'Not set'}
-          </span>
-        </div>
-        <div className="flex gap-1">
-          <button
-            onClick={() => regen(side)}
-            disabled={busy === side}
-            className="text-xs px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium transition disabled:opacity-50"
-          >
-            {busy === side && editing !== side ? '…' : 'Regenerate'}
-          </button>
-          <button
-            onClick={() => startEdit(side)}
-            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium transition"
-          >
-            Edit coords
-          </button>
-        </div>
-      </div>
-      {editing === side ? (
-        <div className="space-y-2 pt-1">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-gray-500 mb-0.5">Latitude</label>
-              <input
-                value={latDraft}
-                onChange={e => setLatDraft(e.target.value)}
-                placeholder="e.g. 33.0198"
-                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-0.5">Longitude</label>
-              <input
-                value={lngDraft}
-                onChange={e => setLngDraft(e.target.value)}
-                placeholder="e.g. -96.6989"
-                className="w-full px-2 py-1.5 text-xs font-mono border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setEditing(null)} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1">Cancel</button>
-            <button
-              onClick={saveEdit}
-              disabled={busy === side}
-              className="text-xs bg-brand-500 hover:bg-brand-600 text-white px-3 py-1 rounded font-medium transition disabled:opacity-50"
-            >
-              {busy === side ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400">
-            Tip: copy "lat, lng" from Google Maps (right-click any location → first item in menu).
-          </p>
-        </div>
-      ) : (
-        has ? (
-          <p className="text-xs font-mono text-gray-500">
-            {parseFloat(String(lat)).toFixed(5)}, {parseFloat(String(lng)).toFixed(5)}
-          </p>
-        ) : (
-          <p className="text-xs text-gray-400 italic">Driver app cannot trip a geofence here. Click Regenerate or Edit coords.</p>
-        )
-      )}
-    </div>
-  );
-
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -697,8 +718,24 @@ export function GeofencePanel({ load, onChanged }: { load: Load; onChanged: () =
         <p className="text-xs text-gray-400">300m radius default</p>
       </div>
       <div className="space-y-2">
-        <Row side="shipper"  label="Shipper"  lat={load.shipper_lat}  lng={load.shipper_lng}  has={hasShipper} />
-        <Row side="receiver" label="Receiver" lat={load.receiver_lat} lng={load.receiver_lng} has={hasReceiver} />
+        <GeofenceRow
+          side="shipper" label="Shipper" lat={load.shipper_lat} lng={load.shipper_lng} has={hasShipper}
+          busy={busy} editing={editing} latDraft={latDraft} lngDraft={lngDraft}
+          setLatDraft={setLatDraft} setLngDraft={setLngDraft}
+          onRegen={() => regen('shipper')}
+          onStartEdit={() => startEdit('shipper')}
+          onSave={saveEdit}
+          onCancel={() => setEditing(null)}
+        />
+        <GeofenceRow
+          side="receiver" label="Receiver" lat={load.receiver_lat} lng={load.receiver_lng} has={hasReceiver}
+          busy={busy} editing={editing} latDraft={latDraft} lngDraft={lngDraft}
+          setLatDraft={setLatDraft} setLngDraft={setLngDraft}
+          onRegen={() => regen('receiver')}
+          onStartEdit={() => startEdit('receiver')}
+          onSave={saveEdit}
+          onCancel={() => setEditing(null)}
+        />
       </div>
       {error && <p className="text-xs text-red-600 bg-red-50 px-2 py-1.5 rounded mt-2">{error}</p>}
     </div>
