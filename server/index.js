@@ -337,6 +337,39 @@ app.get('/api/loads', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Driving distance helper (OSRM — no API key needed) ──
+async function drivingMiles(originLatLng, destLatLng) {
+  if (!originLatLng || !destLatLng) return null;
+  const { lat: oLat, lng: oLng } = originLatLng;
+  const { lat: dLat, lng: dLng } = destLatLng;
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=false`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'HaulFlow-TMS/1.0' } });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const meters = data?.routes?.[0]?.distance;
+    if (!meters) return null;
+    return meters / 1609.344; // meters → miles
+  } catch { return null; }
+}
+
+// POST /api/distance — used by the load create form to auto-fill miles
+app.post('/api/distance', authMiddleware, async (req, res) => {
+  try {
+    const { origin, dest } = req.body || {};
+    if (!origin || !dest) return res.status(400).json({ error: 'origin and dest required' });
+    const [originGeo, destGeo] = await Promise.all([
+      geocodeAddress(origin.address, origin.city, origin.state),
+      geocodeAddress(dest.address,   dest.city,   dest.state),
+    ]);
+    if (!originGeo) return res.status(422).json({ error: 'Could not geocode origin address' });
+    if (!destGeo)   return res.status(422).json({ error: 'Could not geocode destination address' });
+    const miles = await drivingMiles(originGeo, destGeo);
+    if (miles == null) return res.status(502).json({ error: 'Routing service unavailable. Try again or enter miles manually.' });
+    res.json({ miles: Math.round(miles), origin: originGeo, dest: destGeo });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Geocoding helper (Nominatim — no API key needed) ──
 async function geocodeAddress(address, city, state) {
   if (!city && !state) return null;

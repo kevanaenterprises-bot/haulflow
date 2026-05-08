@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Loader2, Wand2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Customer, Shipper } from '../../types';
 
@@ -18,6 +18,10 @@ export default function CreateLoadModal({ customers, onClose, onCreated }: Props
   const [shippers, setShippers] = useState<Shipper[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [milesAutofilled, setMilesAutofilled] = useState(false); // tracks whether the value came from auto-calc
+  const [milesUserTouched, setMilesUserTouched] = useState(false); // user typed in the miles field — don't overwrite
+  const [calculatingMiles, setCalculatingMiles] = useState(false);
+  const [milesError, setMilesError] = useState('');
 
   const selectedCustomer = customers.find(c => c.id === form.customer_id);
   const fsEnabled = selectedCustomer?.fuel_surcharge_enabled;
@@ -29,6 +33,40 @@ export default function CreateLoadModal({ customers, onClose, onCreated }: Props
   }, []);
 
   const set = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }));
+
+  // Calculate driving miles between origin and dest. Used by both auto-fill and manual button.
+  const calculateMiles = async () => {
+    if (!form.origin_city || !form.origin_state || !form.dest_city || !form.dest_state) return;
+    setCalculatingMiles(true);
+    setMilesError('');
+    try {
+      const r = await api.post('/api/distance', {
+        origin: { address: form.origin_address, city: form.origin_city, state: form.origin_state },
+        dest:   { address: form.dest_address,   city: form.dest_city,   state: form.dest_state },
+      });
+      if (r?.miles != null) {
+        setForm(f => ({ ...f, miles: String(r.miles) }));
+        setMilesAutofilled(true);
+        setMilesError('');
+      }
+    } catch (e: any) {
+      setMilesError(e.message || 'Could not calculate miles');
+    } finally {
+      setCalculatingMiles(false);
+    }
+  };
+
+  // Debounced auto-calculate when both addresses are filled in and the user hasn't manually edited miles
+  const debounceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (milesUserTouched) return; // user is typing in miles — leave it alone
+    const haveBoth = form.origin_city && form.origin_state && form.dest_city && form.dest_state;
+    if (!haveBoth) return;
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => { calculateMiles(); }, 700);
+    return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.origin_address, form.origin_city, form.origin_state, form.dest_address, form.dest_city, form.dest_state]);
 
   const shipperList = shippers.filter(s => s.type === 'shipper' || s.type === 'both');
   const receiverList = shippers.filter(s => s.type === 'receiver' || s.type === 'both');
@@ -127,7 +165,40 @@ export default function CreateLoadModal({ customers, onClose, onCreated }: Props
 
           <div className="grid grid-cols-2 gap-4 border-t pt-4">
             <Field label="Rate ($)" type="number" value={form.rate} onChange={v => set('rate', v)} placeholder="0.00" />
-            <Field label="Miles" type="number" value={form.miles} onChange={v => set('miles', v)} placeholder="e.g. 450" />
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Miles</label>
+                <button
+                  type="button"
+                  onClick={() => { setMilesUserTouched(false); calculateMiles(); }}
+                  disabled={calculatingMiles || !form.origin_city || !form.origin_state || !form.dest_city || !form.dest_state}
+                  className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Calculate driving distance from addresses"
+                >
+                  {calculatingMiles ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                  {calculatingMiles ? 'Calculating…' : 'Calculate'}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={form.miles}
+                  onChange={e => { setMilesUserTouched(true); setMilesAutofilled(false); set('miles', e.target.value); }}
+                  placeholder="e.g. 450 (auto-fills from addresses)"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                {calculatingMiles && (
+                  <div className="absolute inset-y-0 right-2 flex items-center text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  </div>
+                )}
+              </div>
+              {milesError ? (
+                <p className="mt-1 text-xs text-amber-600">{milesError}</p>
+              ) : milesAutofilled && form.miles ? (
+                <p className="mt-1 text-xs text-green-600">Auto-filled from driving route</p>
+              ) : null}
+            </div>
           </div>
 
           {/* Fuel surcharge preview */}
