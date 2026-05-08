@@ -1,21 +1,4 @@
 {
-  "cli": {
-    "version": ">= 18.8.1",
-    "appVersionSource": "remote"
-  },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "distribution": "internal"
-    },
-    "production": {
-      "autoIncrement": true
-    }
-  },
-  "submit": {
-    "production": {}
-  }
+  "_comment": "This file is no longer used. The Expo wrapper has moved to ./mobile/. Run `cd mobile && eas build` instead. You can safely delete this file.",
+  "_moved_to": "./mobile/eas.json"
 }
