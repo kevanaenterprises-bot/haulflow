@@ -1,0 +1,5 @@
+mobile/
+*.ts
+*.tsx
+!.next
+node_modules/
