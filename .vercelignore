@@ -1,5 +1,4 @@
 mobile/
-*.ts
-*.tsx
-!.next
+**/*.ts
+**/*.tsx
 node_modules/
