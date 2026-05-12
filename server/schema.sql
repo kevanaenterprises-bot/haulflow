@@ -289,6 +289,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='dot_number') THEN
     ALTER TABLE companies ADD COLUMN dot_number VARCHAR(50);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='is_demo') THEN
+    ALTER TABLE companies ADD COLUMN is_demo BOOLEAN DEFAULT false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='demo_expires_at') THEN
+    ALTER TABLE companies ADD COLUMN demo_expires_at TIMESTAMPTZ;
+  END IF;
 END $$;
 
 -- ── Trucks & Trailers ────────────────────────────────────────────────────────

@@ -1689,6 +1689,214 @@ app.get('/api/reports/ifta', authMiddleware, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo Sandbox
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.post('/api/demo/start', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const uid   = Date.now().toString(36);
+    const exp   = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // ── Company ──
+    const { rows: [company] } = await client.query(`
+      INSERT INTO companies
+        (name, email, phone, city, state, mc_number, dot_number,
+         subscription_status, trial_ends_at, is_demo, demo_expires_at)
+      VALUES
+        ('Midwest Express Logistics', $1, '(312) 555-0182',
+         'Chicago', 'IL', 'MC-928471', 'DOT-4419283',
+         'demo', $2, true, $2)
+      RETURNING *
+    `, [`demo-${uid}@haulflow.demo`, exp]);
+    const cid = company.id;
+
+    // ── Admin user ──
+    const { rows: [user] } = await client.query(`
+      INSERT INTO users (company_id, email, password_hash, name, role)
+      VALUES ($1, $2, 'demo-no-login', 'Alex Rivera', 'admin')
+      RETURNING *
+    `, [cid, `demo-${uid}-admin@haulflow.demo`]);
+
+    // ── Customers ──
+    const custRows = await client.query(`
+      INSERT INTO customers (company_id, company_name, contact_name, email, phone, city, state)
+      VALUES
+        ($1, 'Amazon Logistics',       'Sarah Chen',   'schen@amazon.com',    '(206) 555-0134', 'Seattle',     'WA'),
+        ($1, 'Home Depot Supply',      'Marcus Webb',  'mwebb@homedepot.com', '(404) 555-0291', 'Atlanta',     'GA'),
+        ($1, 'Walmart Transportation', 'Diana Park',   'dpark@walmart.com',   '(479) 555-0447', 'Bentonville', 'AR'),
+        ($1, 'FedEx Freight',          'Tom Nguyen',   'tnguyen@fedex.com',   '(901) 555-0388', 'Memphis',     'TN')
+      RETURNING id, company_name
+    `, [cid]);
+    const customers = custRows.rows;
+
+    // ── Shippers ──
+    await client.query(`
+      INSERT INTO shippers (company_id, name, contact_name, phone, address, city, state, zip)
+      VALUES
+        ($1, 'Chicago Distribution Center',  'Bill Torres',  '(312) 555-0091', '4400 S Cicero Ave',  'Chicago',       'IL', '60632'),
+        ($1, 'Detroit Auto Parts Hub',        'Kelly Mason',  '(313) 555-0267', '1800 Clark St',      'Detroit',       'MI', '48209'),
+        ($1, 'Indianapolis Freight Terminal', 'Ray Johnson',  '(317) 555-0412', '2200 Shadeland Ave', 'Indianapolis',  'IN', '46219'),
+        ($1, 'St. Louis Gateway Depot',       'Carla Reeves', '(314) 555-0553', '3900 Chouteau Ave',  'St. Louis',     'MO', '63110')
+    `, [cid]);
+
+    // ── Trucks ──
+    await client.query(`
+      INSERT INTO trucks (company_id, type, unit_number, year, make, model, vin, license_plate, plate_state, status)
+      VALUES
+        ($1, 'truck',   'T-101', 2021, 'Kenworth',    'T680',         '1XKWDB9X5MJ123456', 'IL-4829KT', 'IL', 'active'),
+        ($1, 'truck',   'T-102', 2020, 'Peterbilt',   '389',          '1XPBDP9X4LD987654', 'IL-7734MW', 'IL', 'active'),
+        ($1, 'truck',   'T-103', 2022, 'Freightliner','Cascadia',     '3AKJGLD56NSNA4321', 'IL-9901RB', 'IL', 'in_shop'),
+        ($1, 'trailer', 'TR-01', 2019, 'Great Dane',  '53ft Dry Van', null,                'TRL-002',   'IL', 'active'),
+        ($1, 'trailer', 'TR-02', 2020, 'Wabash',      '53ft Reefer',  null,                'TRL-009',   'IL', 'active')
+    `, [cid]);
+
+    // ── Drivers ──
+    const driverRows = await client.query(`
+      INSERT INTO drivers
+        (company_id, name, phone, email, license_number, status,
+         last_known_lat, last_known_lng, last_known_speed)
+      VALUES
+        ($1, 'James "Big Jim" Carter',   '(312) 555-0844', 'jcarter@demo.com',    'IL-CDL-4492817', 'on_load',   41.8827, -87.6233, 62),
+        ($1, 'Maria Gonzalez',           '(312) 555-0391', 'mgonzalez@demo.com',  'IL-CDL-3871044', 'on_load',   39.7684, -86.1581, 0),
+        ($1, 'Derek "Slim" Washington',  '(312) 555-0712', 'dwashington@demo.com','IL-CDL-9920133', 'available', null,    null,     null)
+      RETURNING id, name
+    `, [cid]);
+    const drivers = driverRows.rows;
+
+    // ── Loads ──
+    const loadsData = [
+      {
+        load_number: 'HF-2025-001', status: 'IN_TRANSIT',
+        driver: drivers[0].id, customer: customers[0].id,
+        origin_city: 'Chicago',      origin_state: 'IL',
+        dest_city:   'Columbus',     dest_state:   'OH',
+        pickup_date: demoDay(-1), delivery_date: demoDay(0),
+        rate: 2850.00, miles: 358, cargo: 'General Merchandise — Palletized',
+      },
+      {
+        load_number: 'HF-2025-002', status: 'WAITING_DISPATCH',
+        driver: null, customer: customers[1].id,
+        origin_city: 'Detroit',      origin_state: 'MI',
+        dest_city:   'Nashville',    dest_state:   'TN',
+        pickup_date: demoDay(1),  delivery_date: demoDay(2),
+        rate: 3200.00, miles: 492, cargo: 'Building Materials — Lumber',
+      },
+      {
+        load_number: 'HF-2025-003', status: 'WAITING_DISPATCH',
+        driver: null, customer: customers[2].id,
+        origin_city: 'Indianapolis', origin_state: 'IN',
+        dest_city:   'Kansas City',  dest_state:   'MO',
+        pickup_date: demoDay(2),  delivery_date: demoDay(3),
+        rate: 1975.00, miles: 479, cargo: 'Consumer Electronics — Fragile',
+      },
+      {
+        load_number: 'HF-2025-004', status: 'AT_SHIPPER',
+        driver: drivers[1].id, customer: customers[3].id,
+        origin_city: 'St. Louis',    origin_state: 'MO',
+        dest_city:   'Memphis',      dest_state:   'TN',
+        pickup_date: demoDay(0),  delivery_date: demoDay(1),
+        rate: 1650.00, miles: 284, cargo: 'Auto Parts — Steel',
+      },
+      {
+        load_number: 'HF-2025-005', status: 'DELIVERED',
+        driver: drivers[0].id, customer: customers[0].id,
+        origin_city: 'Chicago',      origin_state: 'IL',
+        dest_city:   'Indianapolis', dest_state:   'IN',
+        pickup_date: demoDay(-3), delivery_date: demoDay(-2),
+        rate: 1400.00, miles: 181, cargo: 'Retail — Mixed Goods',
+      },
+      {
+        load_number: 'HF-2025-006', status: 'DELIVERED',
+        driver: drivers[2].id, customer: customers[1].id,
+        origin_city: 'Chicago',      origin_state: 'IL',
+        dest_city:   'Detroit',      dest_state:   'MI',
+        pickup_date: demoDay(-7), delivery_date: demoDay(-6),
+        rate: 1725.00, miles: 283, cargo: 'Industrial Equipment',
+      },
+    ];
+
+    const loadIds = [];
+    for (const l of loadsData) {
+      const { rows: [load] } = await client.query(`
+        INSERT INTO loads
+          (company_id, load_number, status, driver_id, customer_id,
+           origin_city, origin_state, dest_city, dest_state,
+           pickup_date, delivery_date, rate, miles, cargo_description)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        RETURNING id
+      `, [cid, l.load_number, l.status, l.driver || null, l.customer,
+          l.origin_city, l.origin_state, l.dest_city, l.dest_state,
+          l.pickup_date, l.delivery_date, l.rate, l.miles, l.cargo]);
+      loadIds.push({ id: load.id, rate: l.rate, status: l.status, loadNumber: l.load_number });
+    }
+
+    // ── Invoices (delivered loads) ──
+    let invoiceCounter = 1001;
+    for (const l of loadIds) {
+      if (l.status === 'DELIVERED') {
+        const isPaid = l.loadNumber === 'HF-2025-006';
+        await client.query(`
+          INSERT INTO invoices (company_id, load_id, invoice_number, amount, status, paid_at)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [cid, l.id, `INV-${invoiceCounter++}`, l.rate,
+            isPaid ? 'PAID' : 'UNPAID',
+            isPaid ? demoDay(-3) : null]);
+      }
+    }
+
+    // ── Fuel purchases (IFTA data) ──
+    await client.query(`
+      INSERT INTO fuel_purchases
+        (company_id, driver_id, truck_unit, purchase_date, state, gallons, price_per_gallon, total_amount)
+      VALUES
+        ($1, $2, 'T-101', $3, 'IL', 87.4, 3.849, 336.48),
+        ($1, $2, 'T-101', $4, 'IN', 62.1, 3.719, 231.06),
+        ($1, $3, 'T-102', $5, 'IL', 91.2, 3.901, 355.77),
+        ($1, $3, 'T-102', $6, 'MO', 54.8, 3.655, 200.29)
+    `, [cid,
+        drivers[0].id, demoDay(-1), demoDay(-3),
+        drivers[1].id, demoDay(-2), demoDay(-5)]);
+
+    await client.query('COMMIT');
+
+    const token = signToken({
+      id:              user.id,
+      company_id:      cid,
+      role:            'admin',
+      is_demo:         true,
+      demo_expires_at: exp.toISOString(),
+      exp:             Math.floor(exp.getTime() / 1000),
+    });
+
+    res.json({ token, user, company, demo_expires_at: exp.toISOString() });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[DEMO] seed error:', err.message);
+    res.status(500).json({ error: 'Could not start demo — please try again.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ── Demo cleanup (cron-friendly — deletes expired demo companies) ──
+app.delete('/api/demo/cleanup', async (req, res) => {
+  const { rowCount } = await pool.query(
+    `DELETE FROM companies WHERE is_demo = true AND demo_expires_at < NOW()`
+  );
+  res.json({ deleted: rowCount });
+});
+
+function demoDay(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 // Serve frontend
 app.use(express.static(join(__dirname, '../dist')));
 app.get('/{*path}', (req, res) => res.sendFile(join(__dirname, '../dist/index.html')));
