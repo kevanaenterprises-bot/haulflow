@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import LoginPage from './screens/LoginPage';
 import OnboardingPage from './screens/OnboardingPage';
+import DemoRequestPage from './screens/DemoRequestPage';
 import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
 import CustomersView from './screens/CustomersView';
@@ -77,12 +78,19 @@ function Inner() {
 }
 
 export default function App() {
-  if (window.location.pathname === '/privacy') {
+  const path = window.location.pathname;
+
+  if (path === '/privacy') {
     return <PrivacyPolicyPage />;
   }
 
+  // Demo request landing page — no auth required
+  if (path === '/demo' || path === '/demo/') {
+    return <DemoRequestPage />;
+  }
+
   // Detect driver portal before auth context loads — avoids any admin auth interference
-  if (window.location.pathname.startsWith('/driver')) {
+  if (path.startsWith('/driver')) {
     return <DriverPortal />;
   }
 

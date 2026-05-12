@@ -72,6 +72,15 @@ export default function LoginPage() {
           New company?{' '}
           <a href="/onboard" className="text-brand-500 hover:underline font-medium">Get started free</a>
         </p>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+          <a
+            href="/demo"
+            className="inline-block w-full bg-gray-50 hover:bg-gray-100 text-brand-600 font-semibold py-2.5 rounded-lg transition text-sm border border-gray-200"
+          >
+            🚛 Request a Demo
+          </a>
+        </div>
       </div>
     </div>
   );
