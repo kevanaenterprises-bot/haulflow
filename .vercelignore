@@ -1,4 +1,2 @@
 mobile/
-**/*.ts
-**/*.tsx
 node_modules/
