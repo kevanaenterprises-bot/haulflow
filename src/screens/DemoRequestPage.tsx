@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Truck, CheckCircle, MapPin, FileText, CreditCard, MessageSquare, Gauge, Users, ChevronDown, ArrowRight } from 'lucide-react';
+import { Truck, CheckCircle, MapPin, FileText, CreditCard, MessageSquare, Gauge, Users, ChevronDown, ArrowRight, Volume2, BookOpen, Heart } from 'lucide-react';
 
 const FEATURES = [
   { icon: FileText,      label: 'Load Management',   desc: 'Create, assign, and close loads end-to-end. Every status, every note, one screen.' },
@@ -178,6 +178,107 @@ export default function DemoRequestPage() {
                 {t}
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── ROAD TOUR ────────────────────────────────────────── */}
+      <section className="relative px-6 py-24 overflow-hidden" style={{ background: '#0a0a0f' }}>
+        {/* ambient glow */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse 80% 50% at 50% 100%, rgba(251,146,60,0.08) 0%, transparent 70%)'
+        }} />
+
+        <div className="relative max-w-5xl mx-auto">
+          {/* Badge */}
+          <div className="flex justify-center mb-8">
+            <span className="inline-flex items-center gap-2 bg-amber-950 border border-amber-800 text-amber-400 text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full">
+              <Heart className="w-3.5 h-3.5" /> Exclusive to HaulFlow · No other TMS has this
+            </span>
+          </div>
+
+          <div className="text-center mb-14">
+            <h2 className="text-4xl md:text-6xl font-black mb-5 leading-tight" style={{ letterSpacing: '-0.04em' }}>
+              Introducing{' '}
+              <span style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Road Tour
+              </span>
+            </h2>
+            <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
+              A way to say <em className="not-italic font-bold text-white">thank you</em> to the people who keep America moving — at zero cost to you or them.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
+            {/* Story */}
+            <div className="space-y-6 text-gray-300 text-lg leading-relaxed">
+              <p>
+                There are over <span className="text-white font-bold">226,000 historical markers</span> scattered across America — from Revolutionary War battlefields to forgotten railroad towns to civil rights landmarks. Most drivers pass them every day without ever knowing what's there.
+              </p>
+              <p>
+                Road Tour changes that. As a driver rolls down the highway and approaches a historical marker, <span className="text-white font-bold">a voice automatically comes on</span> and tells the story of that exact location — what happened there, who lived there, why it matters.
+              </p>
+              <p>
+                Drivers spend weeks away from their families, sleeping in their cab, grinding through weather and traffic and long nights. Road Tour is our way of making those miles feel less lonely — and honoring the sacrifice they make every single day to supply this country.
+              </p>
+            </div>
+
+            {/* Feature cards */}
+            <div className="space-y-4">
+              {[
+                {
+                  icon: MapPin,
+                  title: '226,000+ markers',
+                  desc: 'Every state. Every highway. From the Alaskan wilderness to the Florida Keys.',
+                  color: 'text-amber-400',
+                  bg: 'bg-amber-950',
+                  border: 'border-amber-900',
+                },
+                {
+                  icon: Volume2,
+                  title: 'Automatic voice narration',
+                  desc: 'No buttons to press. As the driver approaches, the story plays — just like a real tour guide in the cab.',
+                  color: 'text-orange-400',
+                  bg: 'bg-orange-950',
+                  border: 'border-orange-900',
+                },
+                {
+                  icon: BookOpen,
+                  title: 'Real history, not trivia',
+                  desc: 'Sourced from official historical registries. The real stories of the people and places that shaped America.',
+                  color: 'text-yellow-400',
+                  bg: 'bg-yellow-950',
+                  border: 'border-yellow-900',
+                },
+                {
+                  icon: Heart,
+                  title: 'Completely free. Always.',
+                  desc: 'No add-on. No subscription tier. Built into every HaulFlow driver portal because drivers deserve more than a blank windshield.',
+                  color: 'text-red-400',
+                  bg: 'bg-red-950',
+                  border: 'border-red-900',
+                },
+              ].map(({ icon: Icon, title, desc, color, bg, border }) => (
+                <div key={title} className={`flex gap-4 rounded-2xl p-5 border ${border}`} style={{ background: '#111' }}>
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-xl ${bg} border ${border} flex items-center justify-center`}>
+                    <Icon className={`w-5 h-5 ${color}`} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white mb-1">{title}</p>
+                    <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom callout */}
+          <div className="rounded-2xl p-8 text-center border border-amber-900/40" style={{ background: 'linear-gradient(135deg, #1a0a00 0%, #0f0800 100%)' }}>
+            <p className="text-amber-400 text-sm font-bold uppercase tracking-widest mb-3">The Bottom Line</p>
+            <p className="text-2xl md:text-3xl font-black text-white leading-snug" style={{ letterSpacing: '-0.02em' }}>
+              No other TMS in the world does this.<br />
+              <span className="text-amber-400">And we built it for free — because it was the right thing to do.</span>
+            </p>
           </div>
         </div>
       </section>
