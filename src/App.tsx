@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import LoginPage from './screens/LoginPage';
 import OnboardingPage from './screens/OnboardingPage';
+import SetupWizardPage from './screens/SetupWizardPage';
 import DemoRequestPage from './screens/DemoRequestPage';
 import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
@@ -87,6 +88,11 @@ export default function App() {
   // Demo request landing page — no auth required
   if (path === '/demo' || path === '/demo/') {
     return <DemoRequestPage />;
+  }
+
+  // Self-Service Onboarding Wizard — post-Stripe payment setup flow
+  if (path === '/setup' || path === '/setup/') {
+    return <SetupWizardPage />;
   }
 
   // Detect driver portal before auth context loads — avoids any admin auth interference
