@@ -194,7 +194,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
             <img
-              src="https://d64gsuwffb70l.cloudfront.net/6983b3d3af6b26bfb6c07812_1770449773066_9dfece9b.jpg"
+              src="https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png"
               alt="Kristy"
               className="w-full h-full object-cover"
             />
@@ -220,7 +220,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-1">See you at 8 AM!</h3>
           <p className="text-sm text-slate-500 leading-relaxed">
-            I'm available from <strong>8 AM – 6 PM</strong> (your local time) to answer questions about HaulFlow.
+            I'm available from <strong>8 AM – 6 PM</strong> (Central Time) to answer questions about HaulFlow.
           </p>
           <p className="text-xs text-slate-400 mt-2">
             Next available: <strong>{getNextOpenTime()}</strong>
@@ -286,7 +286,7 @@ const StreamingPanel: React.FC<{
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center overflow-hidden">
             <img
-              src="https://d64gsuwffb70l.cloudfront.net/6983b3d3af6b26bfb6c07812_1770449773066_9dfece9b.jpg"
+              src="https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png"
               alt="Kristy"
               className="w-full h-full object-cover"
             />
