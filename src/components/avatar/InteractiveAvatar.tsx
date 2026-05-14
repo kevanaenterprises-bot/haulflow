@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, MessageCircle } from 'lucide-react';
+import { X } from 'lucide-react';
 
 // ─── Working Hours Logic ──────────────────────────────────────────────────────
 const WORKING_HOURS_START = 8;  // 8 AM local time
@@ -26,11 +26,15 @@ function getNextOpenTime(): string {
   return `${WORKING_HOURS_START}:00 AM`;
 }
 
+// ─── Kristy's profile picture URL ────────────────────────────────────────────
+const KRISTY_AVATAR_URL =
+  'https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
+
 // ─── LiveAvatar iframe embed ──────────────────────────────────────────────────
 const LIVE_AVATAR_SRC =
   'https://embed.liveavatar.com/v1/f6438381-978c-49a8-b28c-893f5e9be9b4?orientation=horizontal';
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 /** Offline mode: shown outside working hours */
 const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -49,13 +53,13 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="absolute bottom-20 right-0 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+    <div className="absolute bottom-20 right-0 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate--200 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
             <img
-              src="https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png"
+              src={KRISTY_AVATAR_URL}
               alt="Kristy"
               className="w-full h-full object-cover"
             />
@@ -124,7 +128,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center overflow-hidden">
             <img
-              src="https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png"
+              src={KRISTY_AVATAR_URL}
               alt="Kristy"
               className="w-full h-full object-cover"
             />
@@ -160,7 +164,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const InteractiveAvatar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -194,13 +198,13 @@ const InteractiveAvatar: React.FC = () => {
         )
       )}
 
-      {/* Floating Chat Bubble */}
+      {/* Floating Action Button */}
       <button
         onClick={isOpen ? handleClose : handleOpen}
-        className={`relative w-14 h-14 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center group ${
+        className={`relative w-14 h-14 rounded-full shadow-lg transition-all duration-300 flex items-center justify-center group overflow-hidden ${
           isOpen
-            ? 'bg-slate-700 hover:bg-slate-800 rotate-0'
-            : 'bg-blue-600 hover:bg-blue-700 hover:scale-110'
+            ? 'bg-slate-700 hover:bg-slate-800'
+            : 'hover:scale-110'
         }`}
         aria-label={isOpen ? 'Close chat' : 'Chat with Kristy'}
       >
@@ -215,9 +219,15 @@ const InteractiveAvatar: React.FC = () => {
         {isOpen ? (
           <X className="w-6 h-6 text-white" />
         ) : (
-          <div className="relative">
-            <MessageCircle className="w-6 h-6 text-white" />
-            <div className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-blue-600 ${
+          <div className="relative w-full h-full">
+            {/* Kristy's profile picture fills the circular button */}
+            <img
+              src={KRISTY_AVATAR_URL}
+              alt="Chat with Kristy"
+              className="w-full h-full object-cover rounded-full"
+            />
+            {/* Green "online" dot indicator */}
+            <div className={`absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
               withinHours ? 'bg-emerald-400' : 'bg-amber-400'
             }`} />
           </div>
