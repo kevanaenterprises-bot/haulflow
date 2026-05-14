@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X, MessageCircle, Send, Loader2, WifiOff, Clock, Mail, Newspaper } from 'lucide-react';
 
-// ─── Working Hours Logic ───────────────────────────────────────────────
+// ─── Working Hours Logic ─────────────────────────────────────────────────────────────────
 const WORKING_HOURS_START = 8;  // 8 AM local time
 const WORKING_HOURS_END = 18;   // 6 PM local time
 
 function isWithinWorkingHours(): boolean {
-  const now = new Date();
-  const hour = now.getHours();
-  return hour >= WORKING_HOURS_START && hour < WORKING_HOURS_END;
+  // ⚠️ TESTING OVERRIDE: Kristy is always online 24/7
+  return true;
 }
 
 function getNextOpenTime(): string {
@@ -27,7 +26,7 @@ function getNextOpenTime(): string {
   return `${WORKING_HOURS_START}:00 AM`;
 }
 
-// ─── Avatar Session Manager ────────────────────────────────────────────
+// ─── Avatar Session Manager ─────────────────────────────────────────────────────────
 interface AvatarSession {
   sessionId: string;
   sdp: RTCSessionDescriptionInit;
@@ -43,7 +42,7 @@ async function fetchAccessToken(): Promise<string> {
   return data.token;
 }
 
-// ─── Outfit of the Day ────────────────────────────────────────────────
+// ─── Outfit of the Day ──────────────────────────────────────────────────────────
 // Selects Kristy's avatar_id based on the current day of the week.
 // 0 = Sunday, 1 = Monday, …, 6 = Saturday
 const kristyOutfits: Record<number, string> = {
@@ -144,7 +143,7 @@ async function stopStreamingSession(token: string, sessionId: string): Promise<v
   }
 }
 
-// ─── Chat enrichment via backend ───────────────────────────────────────
+// ─── Chat enrichment via backend ─────────────────────────────────────────────────────────
 // Routes every visitor message through /api/avatar-chat so the backend
 // can detect news intent, fetch headlines, and return an enriched prompt.
 
@@ -169,7 +168,7 @@ async function enrichMessage(message: string): Promise<ChatResponse> {
   return resp.json();
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────
+// ─── Sub-components ──────────────────────────────────────────────────────────────────────
 
 /** Offline mode: shown outside working hours */
 const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -194,7 +193,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center overflow-hidden">
             <img
-              src="https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png"
+              src="https://d64gsuwffb70l.cloudfront.net/6983b3d3af6b26bfb6c07812_1770449773066_9dfece9b.jpg"
               alt="Kristy"
               className="w-full h-full object-cover"
             />
@@ -220,7 +219,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-1">See you at 8 AM!</h3>
           <p className="text-sm text-slate-500 leading-relaxed">
-            I'm available from <strong>8 AM – 6 PM</strong> (Central Time) to answer questions about HaulFlow.
+            I'm available from <strong>8 AM – 6 PM</strong> (your local time) to answer questions about HaulFlow.
           </p>
           <p className="text-xs text-slate-400 mt-2">
             Next available: <strong>{getNextOpenTime()}</strong>
@@ -286,7 +285,7 @@ const StreamingPanel: React.FC<{
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center overflow-hidden">
             <img
-              src="https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png"
+              src="https://d64gsuwffb70l.cloudfront.net/6983b3d3af6b26bfb6c07812_1770449773066_9dfece9b.jpg"
               alt="Kristy"
               className="w-full h-full object-cover"
             />
@@ -372,7 +371,7 @@ const StreamingPanel: React.FC<{
   );
 };
 
-// ─── Main Component ────────────────────────────────────────────────────
+// ─── Main Component ────────────────────────────────────────────────────────────────────
 
 const InteractiveAvatar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
