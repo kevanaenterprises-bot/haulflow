@@ -1,3 +1,4 @@
+import InteractiveAvatar from '../components/avatar/InteractiveAvatar';
 import React, { useState } from 'react';
 import { Truck, CheckCircle, MapPin, FileText, CreditCard, MessageSquare, Gauge, Users, ChevronDown, ArrowRight, Volume2, BookOpen, Heart } from 'lucide-react';
 
@@ -283,6 +284,7 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
+
       {/* ── DEMO FORM ────────────────────────────────────────── */}
       <section id="demo-form" className="bg-gray-950 px-6 py-24">
         <div className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-16 items-start">
@@ -429,6 +431,8 @@ export default function DemoRequestPage() {
           </p>
         </div>
       </footer>
+      {/* Interactive Avatar (HeyGen) - floating chat widget */}
+      <InteractiveAvatar />
     </div>
   );
 }
