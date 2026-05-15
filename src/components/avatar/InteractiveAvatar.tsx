@@ -2,33 +2,43 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 // ─── Working Hours Logic ──────────────────────────────────────────────────────
-const WORKING_HOURS_START = 8;  // 8 AM local time
-const WORKING_HOURS_END = 18;   // 6 PM local time
+const WORKING_HOURS_START = 8;  // 8 AM Central Time
+const WORKING_HOURS_END = 18;   // 6 PM Central Time
+
+/**
+ * Returns the current hour (0–23) in America/Chicago (Central Time).
+ * Intl.DateTimeFormat automatically handles CST (UTC-6) vs CDT (UTC-5) / DST.
+ */
+function getCentralHour(): number {
+  return parseInt(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Chicago',
+      hour: 'numeric',
+      hour12: false,
+    }).format(new Date()),
+    10
+  );
+}
 
 function isWithinWorkingHours(): boolean {
-  // ⭐ TESTING OVERRIDE: Kristy is always online 24/7
-  return true;
+  const hour = getCentralHour();
+  return hour >= WORKING_HOURS_START && hour < WORKING_HOURS_END;
 }
 
 function getNextOpenTime(): string {
-  const now = new Date();
-  const hour = now.getHours();
-
+  const hour = getCentralHour();
+  // If it's before 8 AM, next open time is 8 AM today (Central).
+  // If it's 6 PM or later, next open time is 8 AM tomorrow (Central).
+  // Either way, display "8:00 AM" since that's the opening time.
   if (hour >= WORKING_HOURS_END) {
-    // After 6 PM – next day 8 AM
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(WORKING_HOURS_START, 0, 0, 0);
-    return tomorrow.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return '8:00 AM tomorrow';
   }
-
-  // Before 8 AM – today 8 AM
-  return `${WORKING_HOURS_START}:00 AM`;
+  return '8:00 AM';
 }
 
 // ─── Kristy's profile picture URL ────────────────────────────────────────────
 const KRISTY_AVATAR_URL =
-  'https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
+  'https://customer-assets.emergentai.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
 
 // ─── LiveAvatar iframe embed ──────────────────────────────────────────────────
 const LIVE_AVATAR_SRC =
@@ -53,7 +63,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   };
 
   return (
-    <div className="absolute bottom-20 right-0 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate--200 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+    <div className="absolute bottom-20 right-0 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -111,7 +121,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </form>
         ) : (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
-            <p className="text-emerald-700 text-sm font-medium">Got it! We&apos;ll follow up at 8 AM. &#10003;</p>
+            <p className="text-emerald-700 text-sm font-medium">Got it! We&apos;ll follow up at 8 AM. &#100003;</p>
           </div>
         )}
       </div>
@@ -226,7 +236,7 @@ const InteractiveAvatar: React.FC = () => {
               alt="Chat with Kristy"
               className="w-full h-full object-cover rounded-full"
             />
-            {/* Green "online" dot indicator */}
+            {/* Online/offline dot indicator */}
             <div className={`absolute bottom-0.5 right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
               withinHours ? 'bg-emerald-400' : 'bg-amber-400'
             }`} />
