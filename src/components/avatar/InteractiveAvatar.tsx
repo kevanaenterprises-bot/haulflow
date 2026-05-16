@@ -166,14 +166,23 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const session = sessionRef.current;
     if (!session) return;
 
-    // Prefer session.talk() if the SDK exposes it; otherwise fall back to
-    // the streaming-task REST endpoint using the session's internal IDs.
+    // Try session.talk() first; if unavailable or fails, fall back to session.speak()
     if (typeof session.talk === 'function') {
       try {
         await session.talk(text);
         return;
       } catch (e) {
-        console.warn('[HaulFlow] session.talk() failed, falling back to fetch:', e);
+        console.warn('[HaulFlow] session.talk() failed, trying session.speak():', e);
+      }
+    }
+
+    // Try session.speak() as second option
+    if (typeof session.speak === 'function') {
+      try {
+        await session.speak(text);
+        return;
+      } catch (e) {
+        console.warn('[HaulFlow] session.speak() failed, falling back to fetch:', e);
       }
     }
 
@@ -208,6 +217,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (session && videoRef.current) {
       console.warn('[HaulFlow] markConnected: attaching stream to video element.');
       session.attach(videoRef.current);
+      // Explicitly unmute and set full volume so audio plays
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
     }
     setStatus('connected');
   }, [clearAllTimers]);
@@ -218,8 +230,10 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       greetingFiredRef.current = true;
       // Add greeting message to chat display immediately
       setMessages([{ role: 'kristy', text: GREETING_TEXT, ts: Date.now() }]);
-      // Fire-and-forget: send greeting audio to avatar
-      sendTalk(GREETING_TEXT).catch(() => {});
+      // Delay 1.5 seconds before sending greeting audio so the audio channel is ready
+      setTimeout(() => {
+        sendTalk(GREETING_TEXT).catch(() => {});
+      }, 1_500);
     }
   }, [status, sendTalk]);
 
@@ -284,6 +298,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         if (videoRef.current) {
           console.warn('[HaulFlow] Attaching stream to video element.');
           session.attach(videoRef.current);
+          // Ensure audio is unmuted when stream attaches
+          videoRef.current.muted = false;
+          videoRef.current.volume = 1.0;
         }
         markConnected(session);
       };
@@ -345,6 +362,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         console.warn('[HaulFlow] Fail-safe fired 3s after session.start() resolved — forcing connected status.');
         if (videoRef.current) {
           sessionRef.current?.attach(videoRef.current);
+          // Ensure audio is unmuted
+          videoRef.current.muted = false;
+          videoRef.current.volume = 1.0;
         }
         markConnected(sessionRef.current);
       }, 3_000);
@@ -462,7 +482,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </div>
 
       {/* Video area — portrait 9/16 aspect ratio */}
-      <div className="w-full bg-slate-950 relative flex-shrink-0" style={{ aspectRatio: '9/16', maxHeight: '280px' }}>
+      <div className="w-full bg-slate-950 relative flex-shrink-0" style={{ aspectRatio: '9/16', maxHeight: '480px' }}>
         <video
           ref={videoRef}
           autoPlay

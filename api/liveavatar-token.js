@@ -56,6 +56,7 @@ export default async function handler(req, res) {
           voice: {
             voice_id: '8DzKSPdgEQPaK5vKG0Rs',
             provider: 'elevenlabs',
+            elevenlabs_key: 'sk_64563163c5faf4eb6af438ba3517984d0cfbb56f3b996c89',
           },
         },
         is_sandbox: false,
