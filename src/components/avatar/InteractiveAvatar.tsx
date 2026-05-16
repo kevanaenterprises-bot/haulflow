@@ -79,7 +79,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="text-center mb-4">
           <h3 className="text-lg font-bold text-slate-900 mb-1">See you at 8 AM!</h3>
           <p className="text-sm text-slate-500 leading-relaxed">
-            I&apos;m available from <strong>8 AM &ndash; 6 PM</strong> Central Time to answer questions about HaulFlow.
+            I&ipos;m available from <strong>8 AM &ndash; 6 PM</strong> Central Time to answer questions about HaulFlow.
           </p>
           <p className="text-xs text-slate-400 mt-2">
             Next available: <strong>{getNextOpenTime()}</strong>
@@ -155,11 +155,13 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         if (cancelled) return;
 
         // 2. Create SDK session
-        const session = new LiveAvatarSession({ sessionToken });
+        const session = new LiveAvatarSession(sessionToken, { voiceChat: true });
+        console.warn('[HaulFlow] LiveAvatarSession created with token:', sessionToken?.slice(0, 8) + '...');
         sessionRef.current = session;
 
         // 3. Wire up events
         session.on('session_stream_ready', (stream: MediaStream) => {
+          console.warn('[HaulFlow] session_stream_ready fired, stream active:', stream?.active);
           if (cancelled) return;
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
@@ -171,12 +173,14 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               if (!videoRef.current) return;
               if (videoRef.current.readyState >= 2) {
                 videoRef.current.play().catch(() => {/* autoplay blocked */});
+                console.warn('[HaulFlow] Video ready, setting status to ready');
                 setStatus('ready');
                 if (handshakeTimerRef.current) clearTimeout(handshakeTimerRef.current);
                 // Send greeting once
                 if (!greetingSentRef.current) {
                   greetingSentRef.current = true;
-                  setMessages([{ role: 'assistant', text: GREETING }]);
+                  setMessages([{ role: 'assistant'
+ text: GREETING }]);
                   speakText(session, GREETING);
                 }
               } else {
@@ -201,7 +205,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         });
 
         // 4. Start session
+        console.warn('[HaulFlow] Calling session.start()...');
         await session.start();
+        console.warn('[HaulFlow] session.start() resolved');
 
         // 5. 30-second handshake timeout
         handshakeTimerRef.current = setTimeout(() => {
