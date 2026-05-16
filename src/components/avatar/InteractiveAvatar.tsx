@@ -132,21 +132,25 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
     }
-    // 10-second fallback: if stream never activates, check video element directly
+    // 30-second fallback: if stream never activates, check video element directly (increased for WebRTC negotiation)
+    console.log('[HaulFlow] Starting 30-second connection timeout for WebRTC negotiation...');
     connectionTimeoutRef.current = setTimeout(() => {
+      console.warn('[HaulFlow] Connection timeout fired after 30 seconds — checking video element...');
       if (videoRef.current) {
         const vid = videoRef.current;
         const hasStream = (vid.srcObject instanceof MediaStream && (vid.srcObject as MediaStream).active) ||
           (vid.readyState >= 2);
         if (hasStream) {
+          console.log('[HaulFlow] Video element has active stream — marking as connected.');
           setStatus('connected');
           return;
         }
       }
-      // No stream detected after 10s — surface an error so the user can retry
+      // No stream detected after 30s — surface an error so the user can retry
+      console.error('[HaulFlow] No stream detected after 30 seconds. Surfacing timeout error.');
       setStatus('error');
       setError('Connection timed out. Please try again.');
-    }, 10_000);
+    }, 30_000);
 
     try {
       // Step 1: Create Session Token via our backend API
@@ -177,21 +181,28 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
       sessionRef.current = session;
 
-      // Listen for stream ready event
-      session.on('session_stream_ready', () => {
+      // Listen for stream_ready and session_stream_ready events (HeyGen SDK may emit either)
+      const onStreamReady = () => {
+        console.log('[HaulFlow] stream_ready / session_stream_ready event received — stream is active.');
         if (connectionTimeoutRef.current) {
           clearTimeout(connectionTimeoutRef.current);
           connectionTimeoutRef.current = null;
+          console.log('[HaulFlow] Connection timeout cleared on stream_ready.');
         }
         if (videoRef.current) {
+          console.log('[HaulFlow] Attaching stream to video element.');
           session.attach(videoRef.current);
         }
         setStatus('connected');
-      });
+      };
+      session.on('session_stream_ready', onStreamReady);
+      // Also listen for 'stream_ready' in case the SDK emits the shorter event name
+      session.on('stream_ready', onStreamReady);
 
       // Also watch the video element directly: if it starts playing, clear the loading overlay
       if (videoRef.current) {
         const onPlay = () => {
+          console.log('[HaulFlow] Video element "playing" event fired — stream is active, marking connected.');
           if (connectionTimeoutRef.current) {
             clearTimeout(connectionTimeoutRef.current);
             connectionTimeoutRef.current = null;
@@ -202,14 +213,27 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       }
 
       session.on('session_state_changed', (state: string) => {
-        if (state === 'DISCONNECTED') {
+        console.log(`[HaulFlow] session_state_changed: ${state}`);
+        if (state === 'CONNECTED') {
+          console.log('[HaulFlow] Session state is CONNECTED — clearing timeout and marking connected.');
+          if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
+          }
+          setStatus('connected');
+        } else if (state === 'DISCONNECTED') {
+          console.log('[HaulFlow] Session state is DISCONNECTED — resetting to idle.');
           setStatus('idle');
           sessionRef.current = null;
+        } else {
+          console.log(`[HaulFlow] Session state changed to: ${state}`);
         }
       });
 
       // Step 3: Start the session — SDK handles the POST /v1/sessions/start internally
+      console.log('[HaulFlow] Calling session.start() — beginning WebRTC negotiation...');
       await session.start();
+      console.log('[HaulFlow] session.start() resolved — awaiting stream_ready or session_state_changed CONNECTED event.');
     } catch (err: any) {
       console.error('[HaulFlow] LiveAvatar session error:', err);
       setError(err.message || 'Failed to start avatar session');
