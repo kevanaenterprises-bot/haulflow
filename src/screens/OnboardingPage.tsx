@@ -55,7 +55,7 @@ export default function OnboardingPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-2">You're in, {ownerName}! 🎉</h2>
           <p className="text-gray-500 mb-2">Your HaulFlow account is ready.</p>
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
-            <p className="text-sm font-semibold text-blue-800 mb-2">✅ Your 14-day free trial has started</p>
+            <p className="text-sm font-semibold text-blue-800 mb-2">✅ Your account is ready</p>
             <p className="text-sm text-blue-700">We sent a welcome email with your next steps. To get started:</p>
             <ol className="text-sm text-blue-700 mt-2 ml-4 list-decimal space-y-1">
               <li>Add your first driver</li>
@@ -86,8 +86,8 @@ export default function OnboardingPage() {
             </div>
             <span className="text-xl font-bold">HaulFlow</span>
           </div>
-          <h1 className="text-2xl font-bold">Start your free trial</h1>
-          <p className="text-brand-100 text-sm mt-1">Set up your dispatch portal in 60 seconds. No credit card required.</p>
+          <h1 className="text-2xl font-bold">Start your account</h1>
+          <p className="text-brand-100 text-sm mt-1">Set up your dispatch portal in 60 seconds. Flat $350/mo — All features included.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
@@ -135,11 +135,11 @@ export default function OnboardingPage() {
             disabled={loading}
             className="w-full bg-brand-500 hover:bg-brand-600 text-white py-3 rounded-xl font-semibold transition disabled:opacity-50 text-base"
           >
-            {loading ? 'Creating your account...' : 'Start Free Trial →'}
+            {loading ? 'Creating your account...' : 'Create Account →'}
           </button>
 
           <p className="text-center text-xs text-gray-400">
-            By signing up you agree to our terms of service. 14-day free trial, then $350/month per carrier.
+            By signing up you agree to our terms of service. Flat $350/mo — All features included.
           </p>
 
           <p className="text-center text-sm text-gray-500">

@@ -70,7 +70,7 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           New company?{' '}
-          <a href="/onboard" className="text-brand-500 hover:underline font-medium">Get started free</a>
+          <a href="/onboard" className="text-brand-500 hover:underline font-medium">Start your account</a>
         </p>
 
         <div className="mt-4 pt-4 border-t border-gray-100 text-center">
