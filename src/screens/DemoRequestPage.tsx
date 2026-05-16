@@ -40,11 +40,11 @@ export default function DemoRequestPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans">
 
-      {/* â”€â”€ HERO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* >> HERO >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
       <section
         className="relative min-h-screen flex flex-col justify-between"
         style={{
-          backgroundImage: 'url(/haulflow-hero.jpg)',
+          backgroundImage: 'url(https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/7e9ca85c59c6448bb9d1c05e0ad669f5_Screenshot 2026-05-16 at 3.50.02_PM.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center 30%',
         }}
@@ -106,7 +106,7 @@ export default function DemoRequestPage() {
             HaulFlow
           </h1>
           <p className="text-xl md:text-2xl text-gray-200 font-light max-w-xl leading-relaxed">
-            The TMS built from the driver seat â€” not a boardroom.
+            The TMS built from the driver seat â€”"not a boardroom.
           </p>
           <a
             href="#demo-form"
@@ -123,7 +123,7 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
-      {/* â”€â”€ ORIGIN STORY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* >> ORIGIN STORY >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
       <section className="bg-gray-950 px-6 py-24">
         <div className="max-w-4xl mx-auto">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-400 mb-4">Our Story</p>
@@ -138,10 +138,10 @@ export default function DemoRequestPage() {
                 Turtle Logistics LLC has been running trucks across America for years. And for years, we paid for TMS platforms that were built by people who had never dispatched a single load.
               </p>
               <p>
-                Features locked behind expensive tiers. Interfaces that took weeks to train. Support that disappeared after the contract was signed. We kept asking ourselves â€” <em className="text-white not-italic font-semibold">why doesn't software like this exist?</em>
+                Features locked behind expensive tiers. Interfaces that took weeks to train. Support that disappeared after the contract was signed. We kept asking ourselves â€”  <em className="text-white not-italic font-semibold">why doesn't software like this exist?</em>
               </p>
               <p>
-                So we stopped waiting. We built HaulFlow â€” from the road up, by people who know exactly what it feels like to have a driver stranded at a shipper at 2am with no way to reach dispatch.
+                So we stopped waiting. We built HaulFlow â„” from the road up, by people who know exactly what it feels like to have a driver stranded at a shipper at 2am with no way to reach dispatch.
               </p>
             </div>
 
@@ -164,7 +164,7 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
-      {/* â”€â”€ WHAT YOU GET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* >> WHAT YOU GET << << << << << << << << << << << << << << << << << << << << << << << << << << << << << << */}
       <section className="bg-gray-900 px-6 py-24">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
@@ -175,7 +175,7 @@ export default function DemoRequestPage() {
             <div className="inline-flex items-baseline gap-2 mt-6 bg-blue-950 border border-blue-800 px-6 py-3 rounded-2xl">
               <span className="text-4xl font-black text-white">$350</span>
               <span className="text-gray-400 text-lg">/mo</span>
-              <span className="text-sm text-blue-300 ml-3">Â· All features Â· Unlimited users Â· No contracts</span>
+              <span className="text-sm text-blue-300 ml-3">Â·All features Â· Unlimited users Â· No contracts</span>
             </div>
           </div>
 
@@ -206,11 +206,11 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
-      {/* â”€â”€ ROAD TOUR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* >> ROAD TOUR >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
       <section className="relative px-6 py-24 overflow-hidden" style={{ background: '#0a0a0f' }}>
         {/* ambient glow */}
         <div className="absolute inset-0 pointer-events-none" style={{
-          background: 'radial-gradient(ellipse 80% 50% at 50% 100%, rgba(251,146,60,0.08) 0%, transparent 70%)'
+          background: 'radial-gradient(ellipse 80% 50% at 50% 100%, rgba(251,146,60,0.08) 0%transparent 70%)'
         }} />
 
         <div className="relative max-w-5xl mx-auto">
@@ -229,7 +229,7 @@ export default function DemoRequestPage() {
               </span>
             </h2>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
-              A way to say <em className="not-italic font-bold text-white">thank you</em> to the people who keep America moving â€” at zero cost to you or them.
+              A way to say <em className="not-italic font-bold text-white">thank you</em> to the people who keep America moving â„” at zero cost to you or them.
             </p>
           </div>
 
@@ -308,7 +308,7 @@ export default function DemoRequestPage() {
       </section>
 
 
-      {/* â”€â”€ DEMO FORM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* >> DEMO FORM >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> */}
       <section id="demo-form" className="bg-gray-950 px-6 py-24">
         <div className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-16 items-start">
 
@@ -416,46 +416,5 @@ export default function DemoRequestPage() {
                   name="notes" value={form.notes} onChange={handleChange}
                   placeholder="What TMS are you using now? What's driving you crazy about it?"
                   rows={3}
-                  className="w-full px-3.5 py-3 rounded-xl text-sm bg-gray-900 border border-gray-700 focus:outline-none focus:border-blue-500 text-white placeholder-gray-600 transition-colors resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={sending}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black py-4 rounded-2xl transition-all duration-150 hover:-translate-y-0.5 text-base tracking-tight"
-                style={{ boxShadow: '0 6px 25px rgba(37,99,235,0.45)' }}
-              >
-                {sending ? 'Getting your demo readyâ€¦' : 'Get Instant Demo Access â†’'}
-              </button>
-
-              <p className="text-center text-xs text-gray-600">
-                No credit card Â· No commitment Â· You'll be inside HaulFlow in seconds
-              </p>
-            </form>
-          </div>
-        </div>
-      </section>
-
-      {/* â”€â”€ FOOTER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <footer className="border-t border-gray-800 px-6 py-10">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-1.5 rounded-lg">
-              <Truck className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <span className="font-black text-white">HaulFlow</span>
-              <span className="text-gray-500 text-xs ml-2">A product of Turtle Logistics LLC</span>
-            </div>
-          </div>
-          <p className="text-xs text-gray-600">
-            Â© {new Date().getFullYear()} Turtle Logistics LLC. Built by carriers, for carriers.
-          </p>
-        </div>
-      </footer>
-      {/* Interactive Avatar (HeyGen) - floating chat widget */}
-      <InteractiveAvatar />
-    </div>
-  );
-}
+                  className="wÆÂ‚Ó2ãR’Ó2&÷VæFVB×†ÂFW‡B×6Ò&rÖw&’Ó“&÷&FW"&÷&FW"Öw&’Ósfö7W3¦÷WFÆ–æRÖæöæRfö7W3¦&÷&FW"Ö&ÇVRÓSFW‡B×v†—FRÆ6V†öÆFW"Öw&’ÓcG&ç6—F–öâÖ6öÆ÷'2&W6—¦RÖæöæR ¢óà¢ÂöF—cà ¢Æ'WGFöà¢G—SÒ'7V&Ö—B ¢F—6&ÆVC×·6VæF–æwĞ¢6Æ74æÖSÒ'rÖgVÆÂ&rÖ&ÇVRÓc†÷fW#¦&rÖ&ÇVRÓSF—6&ÆVC¦÷6—G’ÓSFW‡B×v†—FRföçBÖ&Æ6²’ÓB&÷VæFVBÓ'†ÂG&ç6—F–öâÖÆÂGW&F–öâÓS†÷fW#¢×G&ç6ÆFR×’ÓãRFW‡BÖ&6RG&6¶–ær×F–v‡B ¢7G–ÆS×·²&÷…6†F÷s¢sg‚#W‚&v&ƒ3rÃ“’Ã#3RÃãCR’r×Ğ¢à¢·6VæF–æròtvWGF–ær–÷W"FVÖò&VG(
+br¢tvWB–ç7FçBFVÖò66W72b3ƒccC²rĞ¢Âö'WGFöãà ¢Ç6Æ74æÖSÒ'FW‡BÖ6VçFW"FW‡B×‡2FW‡BÖw&’Óc#à¢æò7&VF—B6&B+ræò6öÖÖ—FÖVçB+r–÷RvÆÂ&R–ç6–FR†VÄfÆ÷r–â6V6öæG0¢Â÷à¢Âöf÷&Óà¢ÂöF—cà¢ÂöF—cà¢Â÷6V7F–öãà ¢²ò¢ãâdôõDU"ããããããããããããããããããããããããããããããããããããããããããããããããããããããããããããããããããããããâ¢÷Ğ¢Æfö÷FW"6Æ74æÖSÒ&&÷&FW"×B&÷&FW"Öw&’Óƒ‚Ób’Ó#à¢ÆF—b6Æ74æÖSÒ&Ö‚×rÓW†Â×‚ÖWFòfÆW‚fÆW‚Ö6öÂÖC¦fÆW‚×&÷r—FV×2Ö6VçFW"§W7F–g’Ö&WGvVVâvÓB#à¢ÆF—b6Æ74æÖSÒ&fÆW‚—FV×2Ö6VçFW"vÓ2#à¢ÆF—b6Æ74æÖSÒ&&rÖ&ÇVRÓcÓãR&÷VæFVBÖÆr#à¢ÅG'V6²6Æ74æÖSÒ'rÓB‚ÓBFW‡B×v†—FR"óà¢ÂöF—cà¢ÆF—cà¢Ç7â6Æ74æÖSÒ&föçBÖ&Æ6²FW‡B×v†—FR#ä†VÄfÆ÷sÂ÷7ãà¢Ç7â6Æ74æÖSÒ'FW‡BÖw&’ÓSFW‡B×‡2ÖÂÓ"#ä&öGV7BöbGW'FÆRÆöv—7F–72ÄÄ3Â÷7ãà¢ÂöF—cà¢ÂöF—cà¢Ç6Æ74æÖSÒ'FW‡B×‡2FW‡BÖw&’Óc#à¢*’¶æWrFFR‚’ævWDgVÆÅ–V"‚—ÒGW'FÆRÆöv—7F–72ÄÄ2â'V–ÇB'’6'&–W'2Âf÷"6'&–W'2à¢Â÷à¢ÂöF—cà¢Âöfö÷FW#à¢²ò¢–çFW&7F—fRfF"„†W”vVâ’ÒfÆöF–ær6†Bv–FvWB¢÷Ğ¢Ä–çFW&7F—fTfF"óà¢ÂöF—cà¢“°§Ğ 
