@@ -142,6 +142,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
+  // Conversation history for LLM context (alternating user/assistant pairs)
+  const conversationHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+
   // Auto-scroll chat to bottom when new messages arrive
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -230,6 +233,8 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       greetingFiredRef.current = true;
       // Add greeting message to chat display immediately
       setMessages([{ role: 'kristy', text: GREETING_TEXT, ts: Date.now() }]);
+      // Add greeting to conversation history for LLM context
+      conversationHistoryRef.current = [{ role: 'assistant', content: GREETING_TEXT }];
       // Delay 1.5 seconds before sending greeting audio so the audio channel is ready
       setTimeout(() => {
         sendTalk(GREETING_TEXT).catch(() => {});
@@ -243,6 +248,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     hasConnectedRef.current = false;
     greetingFiredRef.current = false;
     setMessages([]);
+    conversationHistoryRef.current = [];
     clearAllTimers();
 
     // 30-second hard timeout: if nothing works, surface an error
@@ -409,10 +415,43 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     setInputText('');
     setIsSending(true);
+
+    // Add user message to chat immediately
     setMessages((prev) => [...prev, { role: 'user', text, ts: Date.now() }]);
 
     try {
-      await sendTalk(text);
+      // Step 1: Send user message to Kristy's brain (/api/avatar-chat) to get LLM response
+      const chatRes = await fetch('/api/avatar-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          conversation_history: conversationHistoryRef.current,
+        }),
+      });
+
+      let speechText: string;
+
+      if (chatRes.ok) {
+        const chatData = await chatRes.json();
+        speechText = chatData.speech_text || text;
+      } else {
+        console.warn('[HaulFlow] /api/avatar-chat failed, using raw user text as fallback');
+        speechText = text;
+      }
+
+      // Step 2: Add Kristy's response to the chat UI
+      setMessages((prev) => [...prev, { role: 'kristy', text: speechText, ts: Date.now() }]);
+
+      // Step 3: Update conversation history for future LLM context
+      conversationHistoryRef.current = [
+        ...conversationHistoryRef.current,
+        { role: 'user', content: text },
+        { role: 'assistant', content: speechText },
+      ].slice(-20); // keep last 10 exchanges
+
+      // Step 4: Pass Kristy's response text to LiveAvatar for mouth movement + audio
+      await sendTalk(speechText);
     } catch (e) {
       console.warn('[HaulFlow] Failed to send message:', e);
     } finally {
