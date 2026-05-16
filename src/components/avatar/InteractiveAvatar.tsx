@@ -130,7 +130,70 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [inputText, setInputText] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
+
+  // ── speak helper: try talk({text}) first, fallback to speak(text), then direct fetch ──
+  async function speakText(session: InstanceType<typeof LiveAvatarSession>, text: string) {
+    // Primary: try session.talk({ text }) — object form used by newer SDK versions
+    try {
+      if (typeof session.talk === 'function') {
+        await session.talk({ text });
+        return;
+      }
+    } catch { /* fall through */ }
+
+    // Secondary: try session.speak(text) — older SDK string form
+    try {
+      if (typeof session.speak === 'function') {
+        await session.speak(text);
+        return;
+      }
+    } catch { /* fall through */ }
+
+    // Final fallback: direct fetch to LiveAvatar streaming task API
+    try {
+      const sessionToken = (session as unknown as { token?: string; sessionToken?: string }).token
+        || (session as unknown as { token?: string; sessionToken?: string }).sessionToken
+        || '';
+      await fetch('https://api.liveavatar.com/v1/streaming.task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+        },
+        body: JSON.stringify({ text, task_type: 'talk' }),
+      });
+    } catch (e) {
+      console.error('[LiveAvatar] speakText all methods failed:', e);
+    }
+  }
+
+  // ── markConnected: audio setup + delayed greeting ─────────────────────────
+  async function markConnected(session: InstanceType<typeof LiveAvatarSession>) {
+    if (greetingSentRef.current) return;
+    greetingSentRef.current = true;
+
+    if (handshakeTimerRef.current) {
+      clearTimeout(handshakeTimerRef.current);
+      handshakeTimerRef.current = null;
+    }
+
+    // Unmute and ensure audio plays
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.volume = 1.0;
+      videoRef.current.play().catch(() => { /* autoplay policy may block, harmless */ });
+    }
+
+    setStatus('ready');
+
+    // 2-second delay before sending the initial greeting so the stream can stabilize
+    await new Promise<void>((resolve) => setTimeout(resolve, 2000));
+
+    setMessages([{ role: 'assistant', text: GREETING }]);
+    speakText(session, GREETING);
+  }
 
   // ── Boot: fetch token then start SDK session ─────────────────────────────
   useEffect(() => {
@@ -167,16 +230,12 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             videoRef.current.srcObject = stream;
             videoRef.current.muted = false;
             videoRef.current.volume = 1.0;
-            videoRef.current.play().catch(() => {/* autoplay blocked */});
+            videoRef.current.play().catch(() => { /* autoplay blocked */ });
           }
           // Fallback: mark ready if not already done by the direct attach path
           if (!greetingSentRef.current) {
-            console.warn('[HaulFlow] Fallback stream_ready: setting status to ready');
-            setStatus('ready');
-            if (handshakeTimerRef.current) clearTimeout(handshakeTimerRef.current);
-            greetingSentRef.current = true;
-            setMessages([{ role: 'assistant', text: GREETING }]);
-            speakText(session, GREETING);
+            console.warn('[HaulFlow] Fallback stream_ready: marking connected');
+            markConnected(session);
           }
         });
 
@@ -206,7 +265,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           session.attach(videoRef.current);
           videoRef.current.muted = false;
           videoRef.current.volume = 1.0;
-          videoRef.current.play().catch(() => {/* autoplay blocked */});
+          videoRef.current.play().catch(() => { /* autoplay blocked */ });
         }
 
         // Wait 1 second to allow the first frame to buffer
@@ -214,17 +273,10 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         if (cancelled) return;
 
-        // Mark ready and send greeting (only once)
+        // Mark connected and send greeting (only once, with 2s internal delay)
         if (!greetingSentRef.current) {
-          greetingSentRef.current = true;
-          console.warn('[HaulFlow] Direct attach path: setting status to ready');
-          setStatus('ready');
-          if (handshakeTimerRef.current) {
-            clearTimeout(handshakeTimerRef.current);
-            handshakeTimerRef.current = null;
-          }
-          setMessages([{ role: 'assistant', text: GREETING }]);
-          speakText(session, GREETING);
+          console.warn('[HaulFlow] Direct attach path: marking connected');
+          markConnected(session);
         }
 
       } catch (err: unknown) {
@@ -250,28 +302,41 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── speak helper: try talk() first, fallback to speak() ──────────────────
-  function speakText(session: InstanceType<typeof LiveAvatarSession>, text: string) {
-    try {
-      if (typeof session.talk === 'function') {
-        session.talk(text);
-      } else if (typeof session.speak === 'function') {
-        session.speak(text);
-      }
-    } catch (e) {
-      try {
-        session.speak(text);
-      } catch { /* ignore */ }
-    }
-  }
-
   // ── Send user message ─────────────────────────────────────────────────────
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || status !== 'ready' || !sessionRef.current) return;
+    if (!text || status !== 'ready' || !sessionRef.current || isThinking) return;
     setInputText('');
     setMessages((prev) => [...prev, { role: 'user', text }]);
-    speakText(sessionRef.current, text);
+
+    // Show "Thinking..." indicator while waiting for AI response
+    setIsThinking(true);
+
+    try {
+      const res = await fetch('/api/avatar-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          conversation_history: messages.map((m) => ({
+            role: m.role,
+            content: m.text,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      const speech_text: string = data.speech_text || data.reply || data.text || '';
+
+      if (speech_text && sessionRef.current) {
+        setMessages((prev) => [...prev, { role: 'assistant', text: speech_text }]);
+        speakText(sessionRef.current, speech_text);
+      }
+    } catch (e) {
+      console.error('[HaulFlow] avatar-chat fetch error:', e);
+    } finally {
+      setIsThinking(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -313,7 +378,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               />
               <span className="text-blue-200 text-xs">
                 {status === 'ready'
-                  ? isSpeaking
+                  ? isThinking
+                    ? 'Thinking…'
+                    : isSpeaking
                     ? 'Speaking…'
                     : 'Live'
                   : status === 'connecting'
@@ -364,6 +431,16 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             )}
           </div>
         )}
+
+        {/* Thinking overlay on video */}
+        {isThinking && status === 'ready' && (
+          <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+            <div className="bg-slate-900/80 text-white text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-2">
+              <div className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              Thinking…
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chat messages */}
@@ -382,6 +459,15 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             </div>
           ))}
+          {isThinking && (
+            <div className="flex justify-start">
+              <div className="bg-slate-700 text-slate-400 text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -393,12 +479,12 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={status === 'ready' ? 'Ask Kristy anything…' : 'Connecting…'}
-          disabled={status !== 'ready'}
+          disabled={status !== 'ready' || isThinking}
           className="flex-1 bg-slate-700 text-white placeholder-slate-400 text-sm px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         />
         <button
           onClick={handleSend}
-          disabled={status !== 'ready' || !inputText.trim()}
+          disabled={status !== 'ready' || !inputText.trim() || isThinking}
           className="p-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex-shrink-0"
           aria-label="Send message"
         >
