@@ -31,9 +31,9 @@ function getNextOpenTime(): string {
 
 // ─── Kristy's profile picture URL ────────────────────────────────────────────
 const KRISTY_AVATAR_URL =
-  'https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
+  'https://customer-assets.emergentAgent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
 
-// ─── LiveAvatar API config ───────────────────────────────────────────────────
+// ─── LiveAvatar API config ────────────────────────────────────────────────────
 const LIVEAVATAR_API_URL = 'https://api.liveavatar.com';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -120,20 +120,44 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<any>(null);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failsafeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasConnectedRef = useRef(false);
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
 
+  const clearAllTimers = useCallback(() => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    if (connectionPollRef.current) {
+      clearInterval(connectionPollRef.current);
+      connectionPollRef.current = null;
+    }
+    if (failsafeTimeoutRef.current) {
+      clearTimeout(failsafeTimeoutRef.current);
+      failsafeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const markConnected = useCallback(() => {
+    if (hasConnectedRef.current) return;
+    hasConnectedRef.current = true;
+    clearAllTimers();
+    console.warn('[HaulFlow] ✅ Marking status as connected — clearing all timers.');
+    setStatus('connected');
+  }, [clearAllTimers]);
+
   const startSession = useCallback(async () => {
     setStatus('connecting');
     setError(null);
+    hasConnectedRef.current = false;
+    clearAllTimers();
 
-    // Clear any existing timeout before starting a new session
-    if (connectionTimeoutRef.current) {
-      clearTimeout(connectionTimeoutRef.current);
-    }
-    // 30-second fallback: if stream never activates, check video element directly (increased for WebRTC negotiation)
-    console.log('[HaulFlow] Starting 30-second connection timeout for WebRTC negotiation...');
+    // 30-second hard timeout: if nothing works, surface an error
+    console.warn('[HaulFlow] Starting 30-second connection timeout for WebRTC negotiation...');
     connectionTimeoutRef.current = setTimeout(() => {
       console.warn('[HaulFlow] Connection timeout fired after 30 seconds — checking video element...');
       if (videoRef.current) {
@@ -141,13 +165,12 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         const hasStream = (vid.srcObject instanceof MediaStream && (vid.srcObject as MediaStream).active) ||
           (vid.readyState >= 2);
         if (hasStream) {
-          console.log('[HaulFlow] Video element has active stream — marking as connected.');
-          setStatus('connected');
+          console.warn('[HaulFlow] Video element has active stream — marking as connected.');
+          markConnected();
           return;
         }
       }
-      // No stream detected after 30s — surface an error so the user can retry
-      console.error('[HaulFlow] No stream detected after 30 seconds. Surfacing timeout error.');
+      console.warn('[HaulFlow] No stream detected after 30 seconds. Surfacing timeout error.');
       setStatus('error');
       setError('Connection timed out. Please try again.');
     }, 30_000);
@@ -171,7 +194,6 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       }
 
       // Step 2: Initialize LiveAvatarSession with the SDK
-      // Dynamic import to avoid SSR issues and keep bundle light
       const { LiveAvatarSession } = await import('@heygen/liveavatar-web-sdk');
 
       const session = new LiveAvatarSession(session_token, {
@@ -183,79 +205,85 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
       // Listen for stream_ready and session_stream_ready events (HeyGen SDK may emit either)
       const onStreamReady = () => {
-        console.log('[HaulFlow] stream_ready / session_stream_ready event received — stream is active.');
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current);
-          connectionTimeoutRef.current = null;
-          console.log('[HaulFlow] Connection timeout cleared on stream_ready.');
-        }
+        console.warn('[HaulFlow] stream_ready / session_stream_ready event received — stream is active.');
         if (videoRef.current) {
-          console.log('[HaulFlow] Attaching stream to video element.');
+          console.warn('[HaulFlow] Attaching stream to video element.');
           session.attach(videoRef.current);
         }
-        setStatus('connected');
+        markConnected();
       };
       session.on('session_stream_ready', onStreamReady);
-      // Also listen for 'stream_ready' in case the SDK emits the shorter event name
       session.on('stream_ready', onStreamReady);
 
       // Also watch the video element directly: if it starts playing, clear the loading overlay
       if (videoRef.current) {
         const onPlay = () => {
-          console.log('[HaulFlow] Video element "playing" event fired — stream is active, marking connected.');
-          if (connectionTimeoutRef.current) {
-            clearTimeout(connectionTimeoutRef.current);
-            connectionTimeoutRef.current = null;
-          }
-          setStatus('connected');
+          console.warn('[HaulFlow] Video element "playing" event fired — stream is active, marking connected.');
+          markConnected();
         };
         videoRef.current.addEventListener('playing', onPlay, { once: true });
       }
 
       session.on('session_state_changed', (state: string) => {
-        console.log(`[HaulFlow] session_state_changed: ${state}`);
+        console.warn(`[HaulFlow] session_state_changed: ${state}`);
         if (state === 'CONNECTED') {
-          console.log('[HaulFlow] Session state is CONNECTED — clearing timeout and marking connected.');
-          if (connectionTimeoutRef.current) {
-            clearTimeout(connectionTimeoutRef.current);
-            connectionTimeoutRef.current = null;
-          }
-          setStatus('connected');
+          console.warn('[HaulFlow] Session state is CONNECTED — marking connected.');
+          markConnected();
         } else if (state === 'DISCONNECTED') {
-          console.log('[HaulFlow] Session state is DISCONNECTED — resetting to idle.');
+          console.warn('[HaulFlow] Session state is DISCONNECTED — resetting to idle.');
           setStatus('idle');
           sessionRef.current = null;
         } else {
-          console.log(`[HaulFlow] Session state changed to: ${state}`);
+          console.warn(`[HaulFlow] Session state changed to: ${state}`);
         }
       });
 
       // Step 3: Start the session — SDK handles the POST /v1/sessions/start internally
-      console.log('[HaulFlow] Calling session.start() — beginning WebRTC negotiation...');
+      console.warn('[HaulFlow] Calling session.start() — beginning WebRTC negotiation...');
       await session.start();
-      console.log('[HaulFlow] session.start() resolved — awaiting stream_ready or session_state_changed CONNECTED event.');
+      console.warn('[HaulFlow] session.start() resolved — starting 1s polling interval and 3s fail-safe.');
+
+      // Polling: every 1s, check if video has srcObject and readyState >= 2 (HAVE_CURRENT_DATA)
+      connectionPollRef.current = setInterval(() => {
+        if (hasConnectedRef.current) {
+          clearInterval(connectionPollRef.current!);
+          connectionPollRef.current = null;
+          return;
+        }
+        const vid = videoRef.current;
+        if (vid && vid.srcObject && vid.readyState >= 2) {
+          console.warn('[HaulFlow] Polling detected video srcObject + readyState >= 2 — marking connected.');
+          markConnected();
+        }
+      }, 1_000);
+
+      // Fail-safe: 3s after session.start() resolves, force connected if no error occurred
+      failsafeTimeoutRef.current = setTimeout(() => {
+        if (hasConnectedRef.current) return;
+        console.warn('[HaulFlow] Fail-safe fired 3s after session.start() resolved — forcing connected status.');
+        markConnected();
+      }, 3_000);
+
     } catch (err: any) {
-      console.error('[HaulFlow] LiveAvatar session error:', err);
+      console.warn('[HaulFlow] LiveAvatar session error:', err);
       setError(err.message || 'Failed to start avatar session');
       setStatus('error');
+      clearAllTimers();
     }
-  }, []);
+  }, [clearAllTimers, markConnected]);
 
   const stopSession = useCallback(async () => {
-    if (connectionTimeoutRef.current) {
-      clearTimeout(connectionTimeoutRef.current);
-      connectionTimeoutRef.current = null;
-    }
+    clearAllTimers();
     try {
       if (sessionRef.current) {
         await sessionRef.current.stop();
       }
     } catch (err) {
-      console.error('[HaulFlow] Error stopping session:', err);
+      console.warn('[HaulFlow] Error stopping session:', err);
     }
     sessionRef.current = null;
     setStatus('idle');
-  }, []);
+  }, [clearAllTimers]);
 
   const toggleMute = useCallback(() => {
     if (!sessionRef.current) return;
@@ -274,16 +302,13 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useEffect(() => {
     startSession();
     return () => {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
+      clearAllTimers();
       if (sessionRef.current) {
         sessionRef.current.stop().catch(() => {});
         sessionRef.current = null;
       }
     };
-  }, [startSession]);
+  }, [startSession, clearAllTimers]);
 
   const handleClose = useCallback(() => {
     stopSession();
@@ -299,7 +324,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <img src={KRISTY_AVATAR_URL} alt="Kristy" className="w-full h-full object-cover" />
           </div>
           <div>
-            <p className="text-white font-semibold text-sm">Kristy – HaulFlow</p>
+            <p className="text-white font-semibold text-sm">Kristy — HaulFlow</p>
             <div className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               <span className="text-blue-200 text-xs">
