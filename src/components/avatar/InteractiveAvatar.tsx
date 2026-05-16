@@ -31,7 +31,7 @@ function getNextOpenTime(): string {
 
 // ─── Kristy's profile picture URL ────────────────────────────────────────────
 const KRISTY_AVATAR_URL =
-  'https://customer-assets.emergentai.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
+  'https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
 
 // ─── LiveAvatar API config ───────────────────────────────────────────────────
 const LIVEAVATAR_API_URL = 'https://api.liveavatar.com';
