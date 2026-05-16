@@ -3,7 +3,7 @@ import { X, Send } from 'lucide-react';
 // @ts-ignore
 import { LiveAvatarSession } from '@heygen/liveavatar-web-sdk';
 
-// ─── Working Hours Logic ───────────────────────────────────────────────────────
+// ─── Working Hours Logic ────────────────────────────────────────────────────
 const WORKING_HOURS_START = 8;  // 8 AM Central Time
 const WORKING_HOURS_END = 18;   // 6 PM Central Time
 
@@ -31,14 +31,14 @@ function getNextOpenTime(): string {
   return '8:00 AM';
 }
 
-// ─── Kristy's profile picture URL ─────────────────────────────────────────────
+// ─── Kristy's profile picture URL ──────────────────────────────────────────────
 const KRISTY_AVATAR_URL =
   'https://customer-assets.emergentAgent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
 
 const GREETING =
   "Hi! I'm Kristy from HaulFlow. I can help you learn about our TMS platform, or if you're curious, ask me about today's news! What would you like to know?";
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [email, setEmail] = useState('');
@@ -179,8 +179,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 // Send greeting once
                 if (!greetingSentRef.current) {
                   greetingSentRef.current = true;
-                  setMessages([{ role: 'assistant'
- text: GREETING }]);
+                  setMessages([{ role: 'assistant', text: GREETING }]);
                   speakText(session, GREETING);
                 }
               } else {
@@ -271,7 +270,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
-  // ── Status overlay label ───────────────────────────────────────────────────
+  // ── Status overlay label ────────────────────────────────────────────────────
   const statusLabel =
     status === 'connecting'
       ? 'Connecting to Kristy…'
@@ -399,7 +398,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-// ─── Main Component ────────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const InteractiveAvatar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
