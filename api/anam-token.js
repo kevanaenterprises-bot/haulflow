@@ -2,7 +2,7 @@
 // Generates an Anam session token with Signature Rotation (10-outfit cycle).
 // Rotation logic: count days since May 16, 2026, use (days % 10) to pick persona.
 
-const ANAM_API_KEY = 'YTM1MjkyYTgtYzFhMC00NWJjLTg0MjQtNWNkZWZhZGM3NGRmOlpTZEVXQkhsbS85UzZ3TUJxME05MG4yK0NQckNZdEJ2bEdoSTUwbUlSZlU9';
+const ANAM_API_KEY = 'YTM1MjkyYTgtYzFhMC00NWJjLTg0MjQtNWNkZWZhZGM3NGRmOlpTZEVXQkhsbS85UzZ3TUJxME05MG4yK0NQckNZdEJ2bEdoSTUwbUlSZlU5';
 
 // 10-persona rotation — one outfit per slot (index 0–9)
 const PERSONA_IDS = [
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${ANAM_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ personaId }),
+      body: JSON.stringify({ personaConfig: { personaId } }),
     });
 
     if (!response.ok) {
