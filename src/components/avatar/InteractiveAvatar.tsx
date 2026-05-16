@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createClient } from '@anam-ai/js-sdk';
 
-// ─── Working Hours Logic ──────────────────────────────────────────────────
+// ─── Working Hours Logic ──────────────────────────────────────────────────────
 const WORKING_HOURS_START = 8;  // 8 AM Central Time
 const WORKING_HOURS_END = 18;   // 6 PM Central Time
 
@@ -142,9 +142,8 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       const client = createClient(sessionToken);
       clientRef.current = client;
 
-      // 3. Stream directly to the video element
-      if (!videoRef.current) throw new Error('Video element not mounted');
-      await client.streamToVideoElement(videoRef.current);
+      // 3. Stream to video and audio elements by ID (fixes "[object HTMLVideoElement] not found" error)
+      await client.streamToVideoAndAudioElements('anam-video-element', 'anam-audio-element');
 
       setStatus('streaming');
     } catch (err: unknown) {
@@ -225,11 +224,14 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       >
         <video
           ref={videoRef}
+          id="anam-video-element"
           autoPlay
           playsInline
           muted={false}
           className="absolute inset-0 w-full h-full object-cover"
         />
+        {/* Hidden audio element for Anam SDK optimal performance */}
+        <audio id="anam-audio-element" autoPlay />
 
         {/* Status overlay */}
         {statusLabel && (
