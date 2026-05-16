@@ -3,7 +3,7 @@ import { X, Send } from 'lucide-react';
 // @ts-ignore
 import { LiveAvatarSession } from '@heygen/liveavatar-web-sdk';
 
-// ─── Working Hours Logic ────────────────────────────────────────────────────
+// ─── Working Hours Logic ──────────────────────────────────────────────────────
 const WORKING_HOURS_START = 8;  // 8 AM Central Time
 const WORKING_HOURS_END = 18;   // 6 PM Central Time
 
@@ -31,7 +31,7 @@ function getNextOpenTime(): string {
   return '8:00 AM';
 }
 
-// ─── Kristy's profile picture URL ──────────────────────────────────────────────
+// ─── Kristy's profile picture URL ────────────────────────────────────────────
 const KRISTY_AVATAR_URL =
   'https://customer-assets.emergentAgent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
 
@@ -79,7 +79,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="text-center mb-4">
           <h3 className="text-lg font-bold text-slate-900 mb-1">See you at 8 AM!</h3>
           <p className="text-sm text-slate-500 leading-relaxed">
-            I&ipos;m available from <strong>8 AM &ndash; 6 PM</strong> Central Time to answer questions about HaulFlow.
+            I&apos;m available from <strong>8 AM &ndash; 6 PM</strong> Central Time to answer questions about HaulFlow.
           </p>
           <p className="text-xs text-slate-400 mt-2">
             Next available: <strong>{getNextOpenTime()}</strong>
@@ -132,7 +132,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
 
-  // ── Boot: fetch token then start SDK session ───────────────────────────────
+  // ── Boot: fetch token then start SDK session ─────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -159,7 +159,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         console.warn('[HaulFlow] LiveAvatarSession created with token:', sessionToken?.slice(0, 8) + '...');
         sessionRef.current = session;
 
-        // 3. Wire up events
+        // 3. Wire up fallback event listeners
         session.on('session_stream_ready', (stream: MediaStream) => {
           console.warn('[HaulFlow] session_stream_ready fired, stream active:', stream?.active);
           if (cancelled) return;
@@ -167,26 +167,16 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             videoRef.current.srcObject = stream;
             videoRef.current.muted = false;
             videoRef.current.volume = 1.0;
-
-            // Poll until video is ready
-            const pollReady = () => {
-              if (!videoRef.current) return;
-              if (videoRef.current.readyState >= 2) {
-                videoRef.current.play().catch(() => {/* autoplay blocked */});
-                console.warn('[HaulFlow] Video ready, setting status to ready');
-                setStatus('ready');
-                if (handshakeTimerRef.current) clearTimeout(handshakeTimerRef.current);
-                // Send greeting once
-                if (!greetingSentRef.current) {
-                  greetingSentRef.current = true;
-                  setMessages([{ role: 'assistant', text: GREETING }]);
-                  speakText(session, GREETING);
-                }
-              } else {
-                setTimeout(pollReady, 1000);
-              }
-            };
-            pollReady();
+            videoRef.current.play().catch(() => {/* autoplay blocked */});
+          }
+          // Fallback: mark ready if not already done by the direct attach path
+          if (!greetingSentRef.current) {
+            console.warn('[HaulFlow] Fallback stream_ready: setting status to ready');
+            setStatus('ready');
+            if (handshakeTimerRef.current) clearTimeout(handshakeTimerRef.current);
+            greetingSentRef.current = true;
+            setMessages([{ role: 'assistant', text: GREETING }]);
+            speakText(session, GREETING);
           }
         });
 
@@ -206,15 +196,36 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         // 4. Start session
         console.warn('[HaulFlow] Calling session.start()...');
         await session.start();
-        console.warn('[HaulFlow] session.start() resolved');
+        console.warn('[HaulFlow] session.start() resolved — direct attach path');
 
-        // 5. 30-second handshake timeout
-        handshakeTimerRef.current = setTimeout(() => {
-          if (!cancelled && status !== 'ready') {
-            setStatus('error');
-            setErrorMsg('Connection timed out. Please try again.');
+        if (cancelled) return;
+
+        // 5. PRIMARY PATH: Direct attach immediately after session.start() resolves
+        if (videoRef.current) {
+          console.warn('[HaulFlow] Direct attach: calling session.attach(videoRef)');
+          session.attach(videoRef.current);
+          videoRef.current.muted = false;
+          videoRef.current.volume = 1.0;
+          videoRef.current.play().catch(() => {/* autoplay blocked */});
+        }
+
+        // Wait 1 second to allow the first frame to buffer
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+
+        if (cancelled) return;
+
+        // Mark ready and send greeting (only once)
+        if (!greetingSentRef.current) {
+          greetingSentRef.current = true;
+          console.warn('[HaulFlow] Direct attach path: setting status to ready');
+          setStatus('ready');
+          if (handshakeTimerRef.current) {
+            clearTimeout(handshakeTimerRef.current);
+            handshakeTimerRef.current = null;
           }
-        }, 30_000);
+          setMessages([{ role: 'assistant', text: GREETING }]);
+          speakText(session, GREETING);
+        }
 
       } catch (err: unknown) {
         if (!cancelled) {
@@ -239,7 +250,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── speak helper: try talk() first, fallback to speak() ───────────────────
+  // ── speak helper: try talk() first, fallback to speak() ──────────────────
   function speakText(session: InstanceType<typeof LiveAvatarSession>, text: string) {
     try {
       if (typeof session.talk === 'function') {
@@ -254,7 +265,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   }
 
-  // ── Send user message ──────────────────────────────────────────────────────
+  // ── Send user message ─────────────────────────────────────────────────────
   const handleSend = () => {
     const text = inputText.trim();
     if (!text || status !== 'ready' || !sessionRef.current) return;
@@ -270,7 +281,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
-  // ── Status overlay label ────────────────────────────────────────────────────
+  // ── Status overlay label ──────────────────────────────────────────────────
   const statusLabel =
     status === 'connecting'
       ? 'Connecting to Kristy…'
@@ -340,7 +351,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
             )}
             {status === 'error' && (
-              <div className="text-red-400 text-2xl">⚠️</div>
+              <div className="text-red-400 text-2xl">&#9888;&#65039;</div>
             )}
             <p className="text-white text-sm font-medium text-center px-4">{statusLabel}</p>
             {status === 'error' && (
