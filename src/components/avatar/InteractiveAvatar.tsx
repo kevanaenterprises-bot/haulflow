@@ -142,11 +142,17 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   }, []);
 
-  const markConnected = useCallback(() => {
+  // markConnected now accepts the session object so it can attach the stream
+  // before transitioning the UI to the connected state.
+  const markConnected = useCallback((session?: any) => {
     if (hasConnectedRef.current) return;
     hasConnectedRef.current = true;
     clearAllTimers();
     console.warn('[HaulFlow] ✅ Marking status as connected — clearing all timers.');
+    if (session && videoRef.current) {
+      console.warn('[HaulFlow] markConnected: attaching stream to video element.');
+      session.attach(videoRef.current);
+    }
     setStatus('connected');
   }, [clearAllTimers]);
 
@@ -166,7 +172,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           (vid.readyState >= 2);
         if (hasStream) {
           console.warn('[HaulFlow] Video element has active stream — marking as connected.');
-          markConnected();
+          markConnected(sessionRef.current);
           return;
         }
       }
@@ -210,7 +216,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           console.warn('[HaulFlow] Attaching stream to video element.');
           session.attach(videoRef.current);
         }
-        markConnected();
+        markConnected(session);
       };
       session.on('session_stream_ready', onStreamReady);
       session.on('stream_ready', onStreamReady);
@@ -219,7 +225,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (videoRef.current) {
         const onPlay = () => {
           console.warn('[HaulFlow] Video element "playing" event fired — stream is active, marking connected.');
-          markConnected();
+          markConnected(sessionRef.current);
         };
         videoRef.current.addEventListener('playing', onPlay, { once: true });
       }
@@ -228,7 +234,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         console.warn(`[HaulFlow] session_state_changed: ${state}`);
         if (state === 'CONNECTED') {
           console.warn('[HaulFlow] Session state is CONNECTED — marking connected.');
-          markConnected();
+          markConnected(sessionRef.current);
         } else if (state === 'DISCONNECTED') {
           console.warn('[HaulFlow] Session state is DISCONNECTED — resetting to idle.');
           setStatus('idle');
@@ -243,7 +249,9 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       await session.start();
       console.warn('[HaulFlow] session.start() resolved — starting 1s polling interval and 3s fail-safe.');
 
-      // Polling: every 1s, check if video has srcObject and readyState >= 2 (HAVE_CURRENT_DATA)
+      // Polling: every 1s, check if video has srcObject and readyState >= 2 (HAVE_CURRENT_DATA).
+      // If the video element exists but has no srcObject yet, proactively try to attach
+      // the stream in case the automatic events were missed.
       connectionPollRef.current = setInterval(() => {
         if (hasConnectedRef.current) {
           clearInterval(connectionPollRef.current!);
@@ -251,17 +259,25 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           return;
         }
         const vid = videoRef.current;
+        if (vid && !vid.srcObject) {
+          console.warn('[HaulFlow] Polling: video has no srcObject — proactively attaching stream.');
+          sessionRef.current?.attach(vid);
+        }
         if (vid && vid.srcObject && vid.readyState >= 2) {
           console.warn('[HaulFlow] Polling detected video srcObject + readyState >= 2 — marking connected.');
-          markConnected();
+          markConnected(sessionRef.current);
         }
       }, 1_000);
 
-      // Fail-safe: 3s after session.start() resolves, force connected if no error occurred
+      // Fail-safe: 3s after session.start() resolves, force connected if no error occurred.
+      // Also ensure the stream is attached before marking connected.
       failsafeTimeoutRef.current = setTimeout(() => {
         if (hasConnectedRef.current) return;
         console.warn('[HaulFlow] Fail-safe fired 3s after session.start() resolved — forcing connected status.');
-        markConnected();
+        if (videoRef.current) {
+          sessionRef.current?.attach(videoRef.current);
+        }
+        markConnected(sessionRef.current);
       }, 3_000);
 
     } catch (err: any) {
