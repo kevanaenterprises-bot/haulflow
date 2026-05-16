@@ -65,13 +65,36 @@ export default function DemoRequestPage() {
               <span className="block text-xs text-blue-300 leading-none -mt-0.5">by Turtle Logistics LLC</span>
             </div>
           </div>
-          <a
-            href="#demo-form"
-            className="hidden md:flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:-translate-y-0.5"
-            style={{ boxShadow: '0 4px 20px rgba(37,99,235,0.4)' }}
-          >
-            Get Demo Access <ArrowRight className="w-4 h-4" />
-          </a>
+          <div className="hidden md:flex items-center gap-3">
+            <a
+              href="/subscribe"
+              className="flex items-center gap-2 border border-blue-500/60 text-blue-300 hover:text-white hover:border-blue-400 px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+            >
+              Carrier Setup
+            </a>
+            <a
+              href="#demo-form"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:-translate-y-0.5"
+              style={{ boxShadow: '0 4px 20px rgba(37,99,235,0.4)' }}
+            >
+              Get Demo Access <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+          {/* Mobile nav buttons */}
+          <div className="flex md:hidden items-center gap-2">
+            <a
+              href="/subscribe"
+              className="flex items-center gap-1.5 border border-blue-500/60 text-blue-300 hover:text-white px-3 py-2 rounded-lg text-xs font-bold transition-all"
+            >
+              Carrier Setup
+            </a>
+            <a
+              href="#demo-form"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 px-3 py-2 rounded-lg text-xs font-bold transition-all"
+            >
+              Demo <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </nav>
 
         {/* HERO COPY */}

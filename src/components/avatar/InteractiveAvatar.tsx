@@ -119,6 +119,7 @@ type SessionStatus = 'idle' | 'connecting' | 'connected' | 'error';
 const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<any>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
@@ -126,6 +127,26 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const startSession = useCallback(async () => {
     setStatus('connecting');
     setError(null);
+
+    // Clear any existing timeout before starting a new session
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+    }
+    // 10-second fallback: if stream never activates, check video element directly
+    connectionTimeoutRef.current = setTimeout(() => {
+      if (videoRef.current) {
+        const vid = videoRef.current;
+        const hasStream = (vid.srcObject instanceof MediaStream && (vid.srcObject as MediaStream).active) ||
+          (vid.readyState >= 2);
+        if (hasStream) {
+          setStatus('connected');
+          return;
+        }
+      }
+      // No stream detected after 10s — surface an error so the user can retry
+      setStatus('error');
+      setError('Connection timed out. Please try again.');
+    }, 10_000);
 
     try {
       // Step 1: Create Session Token via our backend API
@@ -158,11 +179,27 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
       // Listen for stream ready event
       session.on('session_stream_ready', () => {
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         if (videoRef.current) {
           session.attach(videoRef.current);
         }
         setStatus('connected');
       });
+
+      // Also watch the video element directly: if it starts playing, clear the loading overlay
+      if (videoRef.current) {
+        const onPlay = () => {
+          if (connectionTimeoutRef.current) {
+            clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = null;
+          }
+          setStatus('connected');
+        };
+        videoRef.current.addEventListener('playing', onPlay, { once: true });
+      }
 
       session.on('session_state_changed', (state: string) => {
         if (state === 'DISCONNECTED') {
@@ -181,6 +218,10 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }, []);
 
   const stopSession = useCallback(async () => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
     try {
       if (sessionRef.current) {
         await sessionRef.current.stop();
@@ -209,6 +250,10 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useEffect(() => {
     startSession();
     return () => {
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
       if (sessionRef.current) {
         sessionRef.current.stop().catch(() => {});
         sessionRef.current = null;
@@ -230,7 +275,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <img src={KRISTY_AVATAR_URL} alt="Kristy" className="w-full h-full object-cover" />
           </div>
           <div>
-            <p className="text-white font-semibold text-sm">Kristy &ndash; HaulFlow</p>
+            <p className="text-white font-semibold text-sm">Kristy – HaulFlow</p>
             <div className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               <span className="text-blue-200 text-xs">
