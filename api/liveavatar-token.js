@@ -26,14 +26,6 @@ const OUTFIT_ROTATION = {
 
 function getAvatarIdForToday() {
   // Use Central Time (America/Chicago) for the day-of-week calculation
-  const centralDay = parseInt(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago',
-      weekday: 'short',
-    }).format(new Date()),
-    10
-  );
-  // Intl weekday 'short' returns text, so use getDay() on a date adjusted to Central
   const now = new Date();
   const centralDate = new Date(
     now.toLocaleString('en-US', { timeZone: 'America/Chicago' })
@@ -64,7 +56,6 @@ export default async function handler(req, res) {
           voice: {
             voice_id: '8DzKSPdgEQPaK5vKG0Rs',
             provider: 'elevenlabs',
-            elevenlabs_key: 'sk_64563163c5faf4eb6af438ba3517984d0cfbb56f3b996c89',
           },
         },
         is_sandbox: false,
