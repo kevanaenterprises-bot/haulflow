@@ -17,8 +17,8 @@ function getCentralHour(): number {
 }
 
 function isWithinWorkingHours(): boolean {
-  const hour = getCentralHour();
-  return hour >= WORKING_HOURS_START && hour < WORKING_HOURS_END;
+  // TEST OVERRIDE: Always return true (bypass 8AM–6PM Central Time check)
+  return true;
 }
 
 function getNextOpenTime(): string {
