@@ -50,113 +50,83 @@ CREATE TABLE IF NOT EXISTS drivers (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS shippers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  address TEXT,
+  city VARCHAR(100),
+  state VARCHAR(50),
+  zip VARCHAR(20),
+  contact_name VARCHAR(255),
+  contact_phone VARCHAR(50),
+  contact_email VARCHAR(255),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS customers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
   company_name VARCHAR(255) NOT NULL,
   contact_name VARCHAR(255),
-  email VARCHAR(255),
-  phone VARCHAR(50),
-  address TEXT,
-  city VARCHAR(100),
-  state VARCHAR(50),
-  fuel_surcharge_enabled BOOLEAN DEFAULT false,
-  fuel_surcharge_per_mile DECIMAL(10,4) DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS shippers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
-  type VARCHAR(20) DEFAULT 'shipper',
-  name VARCHAR(255) NOT NULL,
-  contact_name VARCHAR(255),
-  phone VARCHAR(50),
+  contact_phone VARCHAR(50),
   email VARCHAR(255),
   address TEXT,
   city VARCHAR(100),
   state VARCHAR(50),
   zip VARCHAR(20),
-  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS loads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
-  load_number VARCHAR(100) NOT NULL,
-  status VARCHAR(50) DEFAULT 'WAITING_DISPATCH',
+  load_number VARCHAR(100),
   driver_id UUID REFERENCES drivers(id) ON DELETE SET NULL,
   customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-  origin_address TEXT,
+  shipper_id UUID REFERENCES shippers(id) ON DELETE SET NULL,
   origin_city VARCHAR(100),
   origin_state VARCHAR(50),
-  dest_address TEXT,
   dest_city VARCHAR(100),
   dest_state VARCHAR(50),
   pickup_date DATE,
   delivery_date DATE,
   rate DECIMAL(10,2),
   miles INTEGER,
-  fuel_surcharge DECIMAL(10,2),
-  extra_stop_fee DECIMAL(10,2),
-  lumper_fee DECIMAL(10,2),
-  cargo_description TEXT,
-  bol_number VARCHAR(100),
-  acceptance_token VARCHAR(100),
-  accepted_at TIMESTAMPTZ,
-  delivered_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(company_id, load_number)
+  status VARCHAR(50) DEFAULT 'PENDING',
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
   load_id UUID REFERENCES loads(id) ON DELETE CASCADE,
-  invoice_number VARCHAR(100) NOT NULL,
+  invoice_number VARCHAR(100),
   amount DECIMAL(10,2),
   status VARCHAR(50) DEFAULT 'UNPAID',
+  sent_at TIMESTAMPTZ,
   paid_at TIMESTAMPTZ,
-  payment_method VARCHAR(50),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  token VARCHAR(64) NOT NULL UNIQUE,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Add new columns to existing tables if they don't exist
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='medical_card_expiry') THEN
-    ALTER TABLE drivers ADD COLUMN medical_card_expiry DATE;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='commodity') THEN
+    ALTER TABLE loads ADD COLUMN commodity VARCHAR(255);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='hire_date') THEN
-    ALTER TABLE drivers ADD COLUMN hire_date DATE;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='weight') THEN
+    ALTER TABLE loads ADD COLUMN weight INTEGER;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='termination_date') THEN
-    ALTER TABLE drivers ADD COLUMN termination_date DATE;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='trailer_number') THEN
+    ALTER TABLE loads ADD COLUMN trailer_number VARCHAR(100);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='cdl_file_url') THEN
-    ALTER TABLE drivers ADD COLUMN cdl_file_url TEXT;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='notes') THEN
+    ALTER TABLE loads ADD COLUMN notes TEXT;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='medical_card_file_url') THEN
-    ALTER TABLE drivers ADD COLUMN medical_card_file_url TEXT;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='extra_stop_fee') THEN
+    ALTER TABLE loads ADD COLUMN extra_stop_fee DECIMAL(10,2);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='job_title') THEN
-    ALTER TABLE users ADD COLUMN job_title VARCHAR(100);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='customers' AND column_name='fuel_surcharge_enabled') THEN
-    ALTER TABLE customers ADD COLUMN fuel_surcharge_enabled BOOLEAN DEFAULT false;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='customers' AND column_name='fuel_surcharge_per_mile') THEN
-    ALTER TABLE customers ADD COLUMN fuel_surcharge_per_mile DECIMAL(10,4) DEFAULT 0;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='miles') THEN
-    ALTER TABLE loads ADD COLUMN miles INTEGER;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='lumper_fee') THEN
+    ALTER TABLE loads ADD COLUMN lumper_fee DECIMAL(10,2);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='fuel_surcharge') THEN
     ALTER TABLE loads ADD COLUMN fuel_surcharge DECIMAL(10,2);
@@ -198,17 +168,17 @@ CREATE TABLE IF NOT EXISTS fuel_purchases (
   load_id UUID REFERENCES loads(id) ON DELETE SET NULL,
   truck_unit VARCHAR(100),
   purchase_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  state VARCHAR(50) NOT NULL,
-  gallons DECIMAL(10,3) NOT NULL,
-  price_per_gallon DECIMAL(10,4),
-  total_amount DECIMAL(10,2) NOT NULL,
-  notes TEXT,
+  gallons DECIMAL(8,3),
+  price_per_gallon DECIMAL(8,4),
+  total_amount DECIMAL(10,2),
+  state VARCHAR(50),
+  city VARCHAR(100),
+  vendor VARCHAR(255),
+  receipt_url TEXT,
+  fuel_type VARCHAR(50) DEFAULT 'diesel',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_fuel_purchases_company ON fuel_purchases(company_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_purchases_driver ON fuel_purchases(driver_id);
 
--- GPS & Geofencing tables
 CREATE TABLE IF NOT EXISTS gps_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
@@ -217,65 +187,49 @@ CREATE TABLE IF NOT EXISTS gps_events (
   lat DECIMAL(10,7) NOT NULL,
   lng DECIMAL(10,7) NOT NULL,
   speed DECIMAL(6,2),
-  heading DECIMAL(5,2),
+  heading DECIMAL(6,2),
   accuracy DECIMAL(8,2),
-  state VARCHAR(50),
-  recorded_at TIMESTAMPTZ DEFAULT NOW()
+  altitude DECIMAL(8,2),
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS geofence_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
   driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
-  load_id UUID REFERENCES loads(id) ON DELETE CASCADE,
-  stop_id VARCHAR(100),
-  stop_type VARCHAR(50),
-  event_type VARCHAR(20) NOT NULL, -- 'enter' or 'exit'
+  load_id UUID REFERENCES loads(id) ON DELETE SET NULL,
+  event_type VARCHAR(50) NOT NULL,
+  geofence_type VARCHAR(50),
+  location_name VARCHAR(255),
   lat DECIMAL(10,7),
   lng DECIMAL(10,7),
-  recorded_at TIMESTAMPTZ DEFAULT NOW()
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS ifta_state_mileage (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
-  driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
-  load_id UUID REFERENCES loads(id) ON DELETE SET NULL,
-  quarter VARCHAR(10) NOT NULL, -- e.g. '2026-Q1'
+  quarter VARCHAR(10) NOT NULL,
   state VARCHAR(50) NOT NULL,
-  miles DECIMAL(10,3) NOT NULL DEFAULT 0,
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(company_id, driver_id, quarter, state)
+  miles DECIMAL(10,3) DEFAULT 0,
+  fuel_gallons DECIMAL(10,3) DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(company_id, quarter, state)
 );
 
--- Add GPS/geofence columns to existing tables
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='shipper_lat') THEN
-    ALTER TABLE loads ADD COLUMN shipper_lat DECIMAL(10,7);
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='truck_id') THEN
+    ALTER TABLE loads ADD COLUMN truck_id UUID REFERENCES trucks(id) ON DELETE SET NULL;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='shipper_lng') THEN
-    ALTER TABLE loads ADD COLUMN shipper_lng DECIMAL(10,7);
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='truck_id') THEN
+    ALTER TABLE drivers ADD COLUMN truck_id UUID REFERENCES trucks(id) ON DELETE SET NULL;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='receiver_lat') THEN
-    ALTER TABLE loads ADD COLUMN receiver_lat DECIMAL(10,7);
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='current_lat') THEN
+    ALTER TABLE drivers ADD COLUMN current_lat DECIMAL(10,7);
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='receiver_lng') THEN
-    ALTER TABLE loads ADD COLUMN receiver_lng DECIMAL(10,7);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='geofence_radius') THEN
-    ALTER TABLE loads ADD COLUMN geofence_radius INTEGER DEFAULT 300;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_lat') THEN
-    ALTER TABLE drivers ADD COLUMN last_known_lat DECIMAL(10,7);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_lng') THEN
-    ALTER TABLE drivers ADD COLUMN last_known_lng DECIMAL(10,7);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_speed') THEN
-    ALTER TABLE drivers ADD COLUMN last_known_speed DECIMAL(6,2);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_known_heading') THEN
-    ALTER TABLE drivers ADD COLUMN last_known_heading DECIMAL(5,2);
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='current_lng') THEN
+    ALTER TABLE drivers ADD COLUMN current_lng DECIMAL(10,7);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='drivers' AND column_name='last_position_update') THEN
     ALTER TABLE drivers ADD COLUMN last_position_update TIMESTAMPTZ;
@@ -295,6 +249,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='demo_expires_at') THEN
     ALTER TABLE companies ADD COLUMN demo_expires_at TIMESTAMPTZ;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='dvir_photo_gated') THEN
+    ALTER TABLE companies ADD COLUMN dvir_photo_gated BOOLEAN DEFAULT false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='maintenance_alert_email') THEN
+    ALTER TABLE companies ADD COLUMN maintenance_alert_email VARCHAR(255);
+  END IF;
 END $$;
 
 -- ── Trucks & Trailers ────────────────────────────────────────────────────────
@@ -308,8 +268,8 @@ CREATE TABLE IF NOT EXISTS trucks (
   model VARCHAR(100),
   vin VARCHAR(50),
   license_plate VARCHAR(50),
-  plate_state VARCHAR(10),
-  status VARCHAR(30) DEFAULT 'active', -- active | inactive | in_shop
+  state VARCHAR(50),
+  status VARCHAR(50) DEFAULT 'active',
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -318,8 +278,8 @@ CREATE TABLE IF NOT EXISTS maintenance_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
   truck_id UUID REFERENCES trucks(id) ON DELETE CASCADE,
-  service_type VARCHAR(100) NOT NULL, -- Oil Change, DOT Inspection, Tire Rotation, etc.
-  service_date DATE NOT NULL,
+  service_type VARCHAR(255) NOT NULL,
+  service_date DATE NOT NULL DEFAULT CURRENT_DATE,
   odometer INTEGER,
   cost DECIMAL(10,2),
   vendor VARCHAR(255),
