@@ -15,13 +15,13 @@ const LIVEAVATAR_API_KEY = 'c4fef820-1351-11f1-a99e-066a7fa2e369';
 // NOTE: Replace these placeholder UUIDs with the actual LiveAvatar avatar_ids
 // once they are retrieved from the LiveAvatar dashboard or List User Avatars API.
 const OUTFIT_ROTATION = {
-  0: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Sunday  — default Kristy
-  1: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Monday
-  2: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Tuesday
-  3: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Wednesday
-  4: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Thursday
-  5: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Friday
-  6: 'f6438381-978c-49a8-b28c-893f5e9be9b4', // Saturday
+  0: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Sunday  — default Kristy
+  1: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Monday
+  2: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Tuesday
+  3: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Wednesday
+  4: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Thursday
+  5: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Friday
+  6: 'a9118ca3-920d-4e04-b7f2-81821710d608', // Saturday
 };
 
 function getAvatarIdForToday() {
