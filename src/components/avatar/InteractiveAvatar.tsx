@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Mic, MicOff, Loader2 } from 'lucide-react';
+import { X, Mic, MicOff, Loader2, Send } from 'lucide-react';
 
 // ─── Working Hours Logic ──────────────────────────────────────────────────────
 const WORKING_HOURS_START = 8;  // 8 AM Central Time
@@ -33,8 +33,11 @@ function getNextOpenTime(): string {
 const KRISTY_AVATAR_URL =
   'https://customer-assets.emergentAgent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/c0ce6e9e6ba64ff88b6e093e3969342b_kristy-avatar.png';
 
-// ─── LiveAvatar API config ────────────────────────────────────────────────────
+// ─── LiveAvatar API config ──────────────────────────────────────────────────
 const LIVEAVATAR_API_URL = 'https://api.liveavatar.com';
+
+const GREETING_TEXT =
+  "Hi! I'm Kristy from HaulFlow. I can help you learn about our TMS platform, or if you're curious, ask me about today's news! What would you like to know?";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -116,6 +119,12 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 type SessionStatus = 'idle' | 'connecting' | 'connected' | 'error';
 
+interface ChatMessage {
+  role: 'user' | 'kristy';
+  text: string;
+  ts: number;
+}
+
 const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<any>(null);
@@ -123,9 +132,20 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const connectionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const failsafeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasConnectedRef = useRef(false);
+  const greetingFiredRef = useRef(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const clearAllTimers = useCallback(() => {
     if (connectionTimeoutRef.current) {
@@ -139,6 +159,42 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (failsafeTimeoutRef.current) {
       clearTimeout(failsafeTimeoutRef.current);
       failsafeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const sendTalk = useCallback(async (text: string) => {
+    const session = sessionRef.current;
+    if (!session) return;
+
+    // Prefer session.talk() if the SDK exposes it; otherwise fall back to
+    // the streaming-task REST endpoint using the session's internal IDs.
+    if (typeof session.talk === 'function') {
+      try {
+        await session.talk(text);
+        return;
+      } catch (e) {
+        console.warn('[HaulFlow] session.talk() failed, falling back to fetch:', e);
+      }
+    }
+
+    // Fallback: direct fetch to the streaming-task API
+    const sessionId: string | undefined = session.sessionId ?? session.session_id ?? session.id;
+    const sdkToken: string | undefined = session.token ?? session.sessionToken ?? session.accessToken;
+    if (!sessionId || !sdkToken) {
+      console.warn('[HaulFlow] Cannot send talk — missing sessionId or token on session object.');
+      return;
+    }
+    try {
+      await fetch(`${LIVEAVATAR_API_URL}/v1/streaming.task`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sdkToken}`,
+        },
+        body: JSON.stringify({ session_id: sessionId, text, task_type: 'talk' }),
+      });
+    } catch (e) {
+      console.warn('[HaulFlow] Streaming task fetch failed:', e);
     }
   }, []);
 
@@ -156,10 +212,23 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setStatus('connected');
   }, [clearAllTimers]);
 
+  // Trigger greeting once when status first becomes 'connected'
+  useEffect(() => {
+    if (status === 'connected' && !greetingFiredRef.current) {
+      greetingFiredRef.current = true;
+      // Add greeting message to chat display immediately
+      setMessages([{ role: 'kristy', text: GREETING_TEXT, ts: Date.now() }]);
+      // Fire-and-forget: send greeting audio to avatar
+      sendTalk(GREETING_TEXT).catch(() => {});
+    }
+  }, [status, sendTalk]);
+
   const startSession = useCallback(async () => {
     setStatus('connecting');
     setError(null);
     hasConnectedRef.current = false;
+    greetingFiredRef.current = false;
+    setMessages([]);
     clearAllTimers();
 
     // 30-second hard timeout: if nothing works, surface an error
@@ -314,6 +383,33 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   }, [isMuted]);
 
+  const handleSendMessage = useCallback(async () => {
+    const text = inputText.trim();
+    if (!text || isSending || status !== 'connected') return;
+
+    setInputText('');
+    setIsSending(true);
+    setMessages((prev) => [...prev, { role: 'user', text, ts: Date.now() }]);
+
+    try {
+      await sendTalk(text);
+    } catch (e) {
+      console.warn('[HaulFlow] Failed to send message:', e);
+    } finally {
+      setIsSending(false);
+    }
+  }, [inputText, isSending, status, sendTalk]);
+
+  const handleInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    },
+    [handleSendMessage]
+  );
+
   // Auto-start session when panel opens
   useEffect(() => {
     startSession();
@@ -332,41 +428,41 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }, [stopSession, onClose]);
 
   return (
-    <div className="absolute bottom-20 right-0 w-80 sm:w-[420px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+    <div className="absolute bottom-20 right-0 w-80 sm:w-[360px] bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 overflow-hidden animate-in slide-in-from-bottom-4 duration-300 flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3 flex items-center justify-between">
+      <div className="bg-gradient-to-r from-blue-700 to-blue-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center overflow-hidden">
+          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center overflow-hidden flex-shrink-0">
             <img src={KRISTY_AVATAR_URL} alt="Kristy" className="w-full h-full object-cover" />
           </div>
           <div>
-            <p className="text-white font-semibold text-sm">Kristy — HaulFlow</p>
+            <p className="text-white font-semibold text-sm leading-tight">Kristy — HaulFlow</p>
             <div className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
               <span className="text-blue-200 text-xs">
                 {status === 'connecting' ? 'Connecting...' : status === 'connected' ? 'Live' : status === 'error' ? 'Error' : 'Ready'}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {status === 'connected' && (
             <button
               onClick={toggleMute}
-              className="text-blue-200 hover:text-white transition-colors p-1"
+              className="text-blue-200 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-blue-600"
               aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
             >
               {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
           )}
-          <button onClick={handleClose} className="text-blue-200 hover:text-white transition-colors p-1">
-            <X className="w-5 h-5" />
+          <button onClick={handleClose} className="text-blue-200 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-blue-600">
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Video area — native LiveAvatar stream via SDK */}
-      <div className="w-full bg-slate-900 relative" style={{ aspectRatio: '16/9' }}>
+      {/* Video area — portrait 9/16 aspect ratio */}
+      <div className="w-full bg-slate-950 relative flex-shrink-0" style={{ aspectRatio: '9/16', maxHeight: '280px' }}>
         <video
           ref={videoRef}
           autoPlay
@@ -376,19 +472,23 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         {/* Connecting overlay */}
         {status === 'connecting' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90">
             <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-3" />
-            <p className="text-sm text-slate-300">Starting Kristy&apos;s session...</p>
+            <p className="text-sm text-slate-300 font-medium">Starting Kristy&apos;s session...</p>
+            <p className="text-xs text-slate-500 mt-1">This may take a few seconds</p>
           </div>
         )}
 
         {/* Error overlay */}
         {status === 'error' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 p-4">
-            <p className="text-sm text-red-400 mb-3 text-center">{error}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 p-4">
+            <div className="w-12 h-12 rounded-full bg-red-900/50 flex items-center justify-center mb-3">
+              <X className="w-6 h-6 text-red-400" />
+            </div>
+            <p className="text-sm text-red-400 mb-4 text-center leading-relaxed">{error}</p>
             <button
               onClick={startSession}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500 transition-colors font-medium"
             >
               Try again
             </button>
@@ -397,20 +497,82 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         {/* Idle overlay */}
         {status === 'idle' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80">
-            <img
-              src={KRISTY_AVATAR_URL}
-              alt="Kristy"
-              className="w-16 h-16 rounded-full mb-3 border-2 border-blue-400"
-            />
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90">
+            <div className="w-16 h-16 rounded-full overflow-hidden mb-3 border-2 border-blue-500 shadow-lg shadow-blue-500/30">
+              <img
+                src={KRISTY_AVATAR_URL}
+                alt="Kristy"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <p className="text-slate-300 text-sm font-medium mb-3">Chat with Kristy</p>
             <button
               onClick={startSession}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+              className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500 transition-colors font-medium shadow-lg shadow-blue-600/30"
             >
               Start conversation
             </button>
           </div>
         )}
+      </div>
+
+      {/* Chat messages area */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 bg-slate-900 min-h-[80px] max-h-[160px]">
+        {messages.length === 0 && status === 'connected' && (
+          <p className="text-slate-500 text-xs text-center py-2">Kristy is ready to chat…</p>
+        )}
+        {messages.map((msg) => (
+          <div
+            key={msg.ts}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            {msg.role === 'kristy' && (
+              <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0 mr-1.5 mt-0.5">
+                <img src={KRISTY_AVATAR_URL} alt="Kristy" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div
+              className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-blue-600 text-white rounded-br-sm'
+                  : 'bg-slate-700 text-slate-100 rounded-bl-sm'
+              }`}
+            >
+              {msg.text}
+            </div>
+          </div>
+        ))}
+        <div ref={chatBottomRef} />
+      </div>
+
+      {/* Chat input */}
+      <div className="px-3 py-3 bg-slate-800 border-t border-slate-700 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            placeholder={status === 'connected' ? 'Ask Kristy anything…' : 'Connecting…'}
+            disabled={status !== 'connected' || isSending}
+            className="flex-1 bg-slate-700 text-slate-100 placeholder-slate-400 text-xs px-3 py-2 rounded-xl border border-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={!inputText.trim() || status !== 'connected' || isSending}
+            className="flex-shrink-0 w-8 h-8 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-xl flex items-center justify-center transition-colors"
+            aria-label="Send message"
+          >
+            {isSending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+        <p className="text-slate-500 text-[10px] text-center mt-1.5">
+          Powered by HaulFlow AI · Voice &amp; text
+        </p>
       </div>
     </div>
   );
