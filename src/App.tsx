@@ -5,6 +5,7 @@ import LoginPage from './screens/LoginPage';
 import OnboardingPage from './screens/OnboardingPage';
 import SetupWizardPage from './screens/SetupWizardPage';
 import DemoRequestPage from './screens/DemoRequestPage';
+import SubscribePage from './screens/SubscribePage';
 import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
 import CustomersView from './screens/CustomersView';
@@ -88,6 +89,11 @@ export default function App() {
   // Demo request landing page — no auth required
   if (path === '/demo' || path === '/demo/') {
     return <DemoRequestPage />;
+  }
+
+  // Subscription / payment gateway transition page — between Demo and Dashboard
+  if (path === '/subscribe' || path === '/subscribe/') {
+    return <SubscribePage />;
   }
 
   // Self-Service Onboarding Wizard — post-Stripe payment setup flow
