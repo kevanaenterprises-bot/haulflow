@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Truck, ArrowRight, Sparkles, CreditCard, Lock } from 'lucide-react';
 
-const _stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-
 export default function SubscribePage() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [codeSuccess, setCodeSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [payError, setPayError] = useState('');
 
   const handleCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +19,24 @@ export default function SubscribePage() {
       }, 1200);
     } else {
       setCodeError('Invalid code. Please try again.');
+    }
+  };
+
+  const handleSubscribe = async () => {
+    setLoading(true);
+    setPayError('');
+    try {
+      const res = await fetch('/api/create-checkout-session', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        setPayError(data.error || 'Could not start checkout. Please try again.');
+        setLoading(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setPayError('Network error. Please try again.');
+      setLoading(false);
     }
   };
 
@@ -56,7 +74,7 @@ export default function SubscribePage() {
                 Activate HaulFlow
               </h1>
               <p className="text-gray-400 text-sm leading-relaxed">
-                You've seen the demo. Ready to run your operation on HaulFlow?
+                You&apos;ve seen the demo. Ready to run your operation on HaulFlow?
                 <br />
                 Subscribe below to get started.
               </p>
@@ -69,24 +87,24 @@ export default function SubscribePage() {
                 <span className="text-gray-400 text-lg">/mo</span>
               </div>
               <p className="text-blue-300 text-xs">
-                All features · Unlimited users · No contracts · Cancel anytime
+                All features &middot; Unlimited users &middot; No contracts &middot; Cancel anytime
               </p>
             </div>
 
-            {/* Stripe Button placeholder */}
+            {/* Subscribe Button */}
             <div className="mb-6">
-              {_stripeKey ? (
-                <button
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl transition-all duration-150 hover:-translate-y-0.5 text-base tracking-tight flex items-center justify-center gap-2"
-                  style={{ boxShadow: '0 6px 25px rgba(37,99,235,0.45)' }}
-                >
-                  <Lock className="w-4 h-4" /> Subscribe & Start Setup <ArrowRight className="w-4 h-4" />
-                </button>
-              ) : (
-                <div className="w-full bg-gray-800 border border-gray-700 text-gray-500 font-semibold py-4 rounded-xl text-center text-sm cursor-not-allowed">
-                  <Lock className="w-4 h-4 inline mr-2 -mt-0.5" />
-                  Payment coming soon — use a Founding Carrier Code below
-                </div>
+              <button
+                onClick={handleSubscribe}
+                disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white font-black py-4 rounded-xl transition-all duration-150 hover:-translate-y-0.5 disabled:translate-y-0 text-base tracking-tight flex items-center justify-center gap-2"
+                style={{ boxShadow: '0 6px 25px rgba(37,99,235,0.45)' }}
+              >
+                <Lock className="w-4 h-4" />
+                {loading ? 'Redirecting to Stripe\u2026' : 'Subscribe & Start Setup'}
+                {!loading && <ArrowRight className="w-4 h-4" />}
+              </button>
+              {payError && (
+                <p className="text-xs text-red-400 mt-2 text-center">{payError}</p>
               )}
             </div>
 
@@ -95,9 +113,9 @@ export default function SubscribePage() {
               <span className="flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Secure checkout
               </span>
-              <span>·</span>
+              <span>&middot;</span>
               <span>Cancel anytime</span>
-              <span>·</span>
+              <span>&middot;</span>
               <span>No setup fees</span>
             </div>
 
@@ -154,7 +172,7 @@ export default function SubscribePage() {
                   <Sparkles className="w-5 h-5 text-green-400" />
                 </div>
                 <p className="text-green-400 font-bold text-sm">Welcome, Founding Carrier!</p>
-                <p className="text-gray-500 text-xs">Redirecting to setup…</p>
+                <p className="text-gray-500 text-xs">Redirecting to setup&hellip;</p>
               </div>
             )}
           </div>
@@ -162,7 +180,7 @@ export default function SubscribePage() {
           {/* Back to demo */}
           <p className="text-center text-xs text-gray-600 mt-6">
             <a href="/demo" className="hover:text-gray-400 transition-colors">
-              ← Back to demo
+               &larr; Back to demo
             </a>
           </p>
         </div>
@@ -181,7 +199,7 @@ export default function SubscribePage() {
             </div>
           </div>
           <p className="text-xs text-gray-600">
-            © {new Date().getFullYear()} Turtle Logistics LLC. Built by carriers, for carriers.
+            &copy; {new Date().getFullYear()} Turtle Logistics LLC. Built by carriers, for carriers.
           </p>
         </div>
       </footer>
