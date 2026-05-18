@@ -44,7 +44,7 @@ export default function DemoRequestPage() {
       <section
         className="relative min-h-screen flex flex-col justify-between"
         style={{
-          backgroundImage: 'url(https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/7e9ca85c59c6448bb9d1c05e0ad669f5_Screenshot%202026-05-16%20at%203.50.02_PM.png)',
+          backgroundImage: 'url(/haulflow-hero.jpg)',
           backgroundSize: 'cover',
           backgroundPosition: 'center 30%',
         }}
