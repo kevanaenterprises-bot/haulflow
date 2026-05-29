@@ -14,7 +14,7 @@ const STAGES = [
   'PAID',               // done
 ];
 
-const DEMO_TTL_HOURS = 24;
+const DEMO_TTL_HOURS = 1;
 
 const SAMPLE_DRIVERS = [
   { name: 'Marcus Webb',  phone: '4692001011' },
@@ -130,6 +130,8 @@ export function registerDemoRoutes(app, pool) {
 
       res.json({
         token,
+        demo_expires_at: expiresAt,
+        company: { id: user.company_id, name: companyRes.rows[0].name },
         user: {
           id: user.id, email: user.email, name: user.name, role: user.role,
           company_id: user.company_id, company_name: companyRes.rows[0].name, is_demo: true,

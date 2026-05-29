@@ -42,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem('hf_token');
+    localStorage.removeItem('hf_demo_expires_at');
     localStorage.removeItem('hf_user');
     localStorage.removeItem('hf_company');
     setUser(null);

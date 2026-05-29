@@ -42,6 +42,7 @@ export default function DemoRequestPage() {
     try {
       const data = await api.post('/api/demo/start', form);
       localStorage.setItem('hf_token', data.token);
+      localStorage.setItem('hf_demo_expires_at', data.demo_expires_at);
       localStorage.setItem('hf_user', JSON.stringify(data.user));
       localStorage.setItem('hf_company', JSON.stringify({ id: data.user.company_id, name: data.user.company_name }));
       // Hard redirect so AuthProvider re-reads localStorage and boots into the Command Center.

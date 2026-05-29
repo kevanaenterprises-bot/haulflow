@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Truck, LayoutDashboard, Users, Building2, FileText, LogOut, Menu, PackageOpen, ShieldCheck, Settings, Map, BarChart2, Wrench, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
+import DemoBanner from '../DemoBanner';
+import DemoExpiredScreen from '../DemoExpiredScreen';
 
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'settings';
 
@@ -27,11 +29,15 @@ const nav = [
 
 export default function AppLayout({ activeTab, onTabChange, children }: AppLayoutProps) {
   const { user, company, logout } = useAuth();
+  const [demoExpired, setDemoExpired] = useState(false);
+  const handleDemoExpired = () => setDemoExpired(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <DemoBanner onExpired={handleDemoExpired} />
+      {demoExpired && <DemoExpiredScreen onRestartDemo={() => window.location.reload()} />}
       {/* Sidebar */}
       <aside
         onMouseEnter={() => setSidebarHovered(true)}
