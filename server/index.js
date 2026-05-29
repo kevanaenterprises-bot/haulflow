@@ -6,6 +6,7 @@ import cors from 'cors';
 import pg from 'pg';
 import crypto from 'crypto';
 import { registerDvirRoutes } from './dvir-routes.js';
+import { registerDemoRoutes } from './demo-routes.js';
 
 const { Pool } = pg;
 
@@ -469,6 +470,7 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
 // DVIR routes
 // ---------------------------------------------------------------------------
 registerDvirRoutes(app, pool, authMiddleware, driverAuthMiddleware);
+registerDemoRoutes(app, pool);
 
 // ---------------------------------------------------------------------------
 // Start
