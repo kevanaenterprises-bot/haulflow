@@ -1,15 +1,14 @@
 import InteractiveAvatar from '../components/avatar/InteractiveAvatar';
 import React, { useState } from 'react';
-import { Truck, CheckCircle, MapPin, FileText, CreditCard, MessageSquare, Gauge, Users, ChevronDown, ArrowRight } from 'lucide-react';
+import { Truck, CheckCircle, MapPin, FileText, CreditCard, Gauge, Radio, Clock, ClipboardCheck, ChevronDown, ArrowRight, Heart } from 'lucide-react';
 import { api } from '../lib/api';
 
 const FEATURES = [
-  { icon: FileText,      label: 'Load Management',   desc: 'Create, assign, and close loads end-to-end. Every status, every note, one screen.' },
-  { icon: MapPin,        label: 'Live GPS Tracking',  desc: 'See every truck on an interactive map in real time. No extra hardware.' },
-  { icon: CreditCard,    label: 'Invoicing & Pay',    desc: 'Auto-generate invoices on delivery. Track aging. Get paid faster.' },
-  { icon: MessageSquare, label: 'SMS Dispatch',       desc: 'Push loads to drivers by text. No app download. No training needed.' },
-  { icon: Users,         label: 'Driver Portal',      desc: 'Drivers upload BOLs and update load status themselves — less phone tag for you.' },
-  { icon: Gauge,         label: 'IFTA Reporting',     desc: 'Mileage by state tracked automatically. Quarter-end prep in minutes.' },
+  { icon: CreditCard,    label: 'Automated Invoicing',        desc: 'Invoices generate themselves the moment a load is delivered. Track aging, see what is owed, get paid faster — no spreadsheets.' },
+  { icon: MapPin,        label: 'Real-Time GPS Tracking',      desc: 'Every truck on a live map, updating in real time. No extra hardware, no per-device fees — it just works.' },
+  { icon: Clock,         label: 'Geo-Digital Timestamps',      desc: 'Automatic, location-stamped arrival and departure times at every shipper and receiver. Proof of detention, settled.' },
+  { icon: Gauge,         label: 'IFTA Quarterly Reports',      desc: 'Mileage by state tracked automatically all quarter long. When filing time comes, your report is already done.' },
+  { icon: ClipboardCheck,label: 'Driver Pre-Trip Inspections', desc: 'Drivers run their pre-trip right from the app — tires, brakes, lights, fluids — with photo capture and fleet-manager alerts on anything that fails.' },
 ];
 
 interface FormState {
@@ -31,21 +30,20 @@ export default function DemoRequestPage() {
     setSending(true);
     setError('');
 
-    // 1) Capture the lead for sales (Vercel function — fire and forget, never blocks).
+    // 1) Capture the lead for sales (fire and forget, never blocks).
     fetch('/api/demo-signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     }).catch(() => {});
 
-    // 2) Spin up the live demo on the backend and log the visitor in.
+    // 2) Spin up the live demo and log the visitor in.
     try {
       const data = await api.post('/api/demo/start', form);
       localStorage.setItem('hf_token', data.token);
       localStorage.setItem('hf_demo_expires_at', data.demo_expires_at);
       localStorage.setItem('hf_user', JSON.stringify(data.user));
       localStorage.setItem('hf_company', JSON.stringify({ id: data.user.company_id, name: data.user.company_name }));
-      // Hard redirect so AuthProvider re-reads localStorage and boots into the Command Center.
       window.location.href = '/';
     } catch (err: any) {
       setSending(false);
@@ -56,6 +54,7 @@ export default function DemoRequestPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans">
 
+      {/* ── HERO ── */}
       <section
         className="relative min-h-screen flex flex-col justify-between"
         style={{ backgroundImage: 'url(/haulflow-hero.jpg)', backgroundSize: 'cover', backgroundPosition: 'center 30%' }}
@@ -79,7 +78,7 @@ export default function DemoRequestPage() {
               The TMS That <span style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Actually Gets</span> Trucking
             </h1>
             <p className="text-lg text-gray-300 mb-8 max-w-xl">
-              Turtle Logistics LLC has been running trucks across America for years. We got tired of TMS platforms built by people who never dispatched a load — so we built our own.
+              Turtle Logistics LLC has run trucks across America for years. We got tired of paying for software built by people who never dispatched a single load — so we built our own. This is it.
             </p>
             <a href="#demo-form" className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-full px-8 py-4 text-lg transition-colors">
               Try the Live Demo <ArrowRight className="w-5 h-5" />
@@ -92,6 +91,33 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
+      {/* ── ROAD TOUR — TRIBUTE SECTION ── */}
+      <section className="px-6 py-24" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)' }}>
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-2 mb-4">
+            <Radio className="w-5 h-5 text-amber-400" />
+            <p className="text-amber-400 uppercase tracking-widest text-xs font-semibold">Road Tour — Our Thank You to Drivers</p>
+          </div>
+          <h2 className="text-4xl font-black mb-6 leading-tight">
+            The history of America, read to you<br />
+            <span style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>from behind the wheel.</span>
+          </h2>
+          <div className="space-y-4 text-gray-300 text-lg leading-relaxed">
+            <p>
+              A truck can't pull into most historical sites. The pull-offs are too small, the lots aren't built for 70 feet of steel. So for generations, drivers have rolled right past the markers that tell the story of the country they're holding together.
+            </p>
+            <p>
+              HaulFlow's <span className="text-white font-semibold">Road Tour</span> changes that. As you drive, the app reads the historical markers along your route aloud — right over your speakers, hands on the wheel, eyes on the road. The battlefields, the boomtowns, the rivers and rail lines. The history you're driving through, told to you as you pass it.
+            </p>
+            <p className="text-white font-semibold flex items-start gap-2">
+              <Heart className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+              It's our way of saying thank you — to the men and women who sacrifice time with their own families to keep every other family in this country fed.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FEATURES ── */}
       <section className="relative px-6 py-24 overflow-hidden" style={{ background: '#0a0a0f' }}>
         <div className="max-w-5xl mx-auto">
           <p className="text-orange-400 uppercase tracking-widest text-xs mb-3 text-center">What's Inside</p>
@@ -112,12 +138,66 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
+      {/* ── PRICING ── */}
+      <section className="px-6 py-24" style={{ background: '#0a0a0f' }}>
+        <div className="max-w-5xl mx-auto">
+          <p className="text-orange-400 uppercase tracking-widest text-xs mb-3 text-center">Simple Pricing</p>
+          <h2 className="text-4xl font-black text-center mb-4">
+            <span style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>No Contracts.</span> No Surprises.
+          </h2>
+          <p className="text-gray-400 text-center mb-16 max-w-xl mx-auto">Built for one-truck owner-operators and growing fleets alike.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* Founding 50 — highlighted */}
+            <div className="rounded-2xl p-8 border-2 border-orange-500 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-xs font-bold px-4 py-1 rounded-full">First 50 Only</div>
+              <div className="font-black text-xl mb-2">Founding Owner-Op</div>
+              <div className="text-4xl font-black mb-1">Free<span className="text-lg font-normal text-gray-400"> / 1 year</span></div>
+              <div className="text-gray-400 text-sm mb-8">For the first 50 owner-operators. One truck.</div>
+              <ul className="space-y-3 mb-8 text-sm">
+                {['Full platform access', 'Live GPS & dispatch', 'Automated invoicing', 'IFTA reports', 'Road Tour for drivers'].map(f => (
+                  <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />{f}</li>
+                ))}
+              </ul>
+              <a href="#demo-form" className="block text-center bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-full py-3 transition-colors">Claim a Founding Spot</a>
+            </div>
+
+            {/* Owner-Op */}
+            <div className="rounded-2xl p-8 border border-gray-800">
+              <div className="font-black text-xl mb-2">Owner-Operator</div>
+              <div className="text-4xl font-black mb-1">$150<span className="text-lg font-normal text-gray-400">/mo</span></div>
+              <div className="text-gray-400 text-sm mb-8">Single truck. Everything you need to run lean.</div>
+              <ul className="space-y-3 mb-8 text-sm">
+                {['Full platform access', 'Live GPS & dispatch', 'Automated invoicing', 'IFTA reports', 'Road Tour for drivers'].map(f => (
+                  <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />{f}</li>
+                ))}
+              </ul>
+              <a href="#demo-form" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
+            </div>
+
+            {/* Fleet / Standard */}
+            <div className="rounded-2xl p-8 border border-gray-800">
+              <div className="font-black text-xl mb-2">Fleet</div>
+              <div className="text-4xl font-black mb-1">$350<span className="text-lg font-normal text-gray-400">/mo</span></div>
+              <div className="text-gray-400 text-sm mb-8">Multi-truck operations. The full command center.</div>
+              <ul className="space-y-3 mb-8 text-sm">
+                {['Everything in Owner-Op', 'Unlimited trucks & drivers', 'Driver portal & pre-trip', 'Geo-digital timestamps', 'Priority support'].map(f => (
+                  <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />{f}</li>
+                ))}
+              </ul>
+              <a href="#demo-form" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── DEMO FORM ── */}
       <section className="px-6 py-24" style={{ background: '#030712' }}>
         <div className="max-w-2xl mx-auto">
           <div className="rounded-2xl border border-gray-800 p-8" style={{ background: '#0f172a' }}>
             <p className="text-orange-400 uppercase tracking-widest text-xs mb-3">Try It Live</p>
             <h2 className="text-3xl font-black mb-2">Walk Through HaulFlow Right Now</h2>
-            <p className="text-gray-400 text-sm mb-8">Fill this out and we'll drop you straight into a live dispatch board with real loads moving. No download, no credit card.</p>
+            <p className="text-gray-400 text-sm mb-8">Fill this out and we'll drop you straight into a live dispatch board with real loads, drivers, and invoices. No download, no credit card.</p>
 
             <form id="demo-form" onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -144,10 +224,10 @@ export default function DemoRequestPage() {
                 <label className="block text-xs text-gray-400 mb-1">Fleet Size</label>
                 <select name="fleetSize" onChange={handleChange} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500">
                   <option value="">Select fleet size…</option>
-                  <option value="1-3">1–3 trucks</option>
-                  <option value="4-10">4–10 trucks</option>
-                  <option value="11-25">11–25 trucks</option>
-                  <option value="26-50">26–50 trucks</option>
+                  <option value="1">Just me — 1 truck</option>
+                  <option value="2-5">2–5 trucks</option>
+                  <option value="6-15">6–15 trucks</option>
+                  <option value="16-50">16–50 trucks</option>
                   <option value="50+">50+ trucks</option>
                 </select>
               </div>
@@ -166,6 +246,7 @@ export default function DemoRequestPage() {
         </div>
       </section>
 
+      {/* ── FOOTER ── */}
       <footer className="border-t border-gray-800 px-6 py-10">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
