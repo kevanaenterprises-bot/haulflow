@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, MapPin, Calendar, DollarSign, User, X, Download, Printer, ChevronDown, ChevronRight, Truck, Clock, FileText, TrendingUp, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
+import { startDemoSimulator } from '../lib/demoSimulator';
 import type { Load, LoadStatus, Driver, Customer } from '../types';
 import { cn, formatCurrency, formatDate } from '../lib/utils';
 import CreateLoadModal from '../components/tms/CreateLoadModal';
@@ -17,6 +19,7 @@ const SECTIONS: { status: LoadStatus; label: string; sublabel: string; color: st
 
 export default function LoadsView({ onNavigate }: { onNavigate?: (tab: string) => void } = {}) {
   const [loads, setLoads] = useState<Load[]>([]);
+  const { user } = useAuth();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,12 @@ export default function LoadsView({ onNavigate }: { onNavigate?: (tab: string) =
     const interval = setInterval(() => api.get('/api/loads').then(setLoads).catch(() => {}), 15000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!user?.is_demo) return;
+    const stop = startDemoSimulator();
+    return stop;
+  }, [user]);
 
   const byStatus = (status: LoadStatus) => loads.filter(l => l.status === status);
   const paidLoads = loads.filter(l => l.status === 'PAID');

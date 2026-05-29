@@ -20,6 +20,7 @@ export interface Company {
 }
 
 export interface User {
+  is_demo?: boolean;
   id: string;
   company_id: string;
   email: string;
