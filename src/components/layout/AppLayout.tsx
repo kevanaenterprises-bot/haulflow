@@ -103,7 +103,7 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
                                 <button onClick={() => setMobileOpen(true)} className="p-1 rounded-lg hover:bg-gray-100">
                                             <Menu className="w-5 h-5" />
                                 </button>
-                                <span className="font-semibold text-gray-800">{nav.find(n => n.id === activeTab)?.label}</span>span>
+                                <span className="font-semibold text-gray-800">{nav.find(n => n.id === activeTab)?.label}</span>
                       </header>
                       <main className="flex-1 overflow-y-auto p-4 lg:p-6">
                         {children}
