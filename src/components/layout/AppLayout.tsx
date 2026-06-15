@@ -56,12 +56,12 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
                       <div className="flex items-center gap-2 px-4 py-5 border-b border-brand-700">
                                 <div className="bg-brand-500 p-1.5 rounded-lg">
                                             <Truck className="w-5 h-5" />
-                                </div>div>
+                                </div>
                                 <div>
-                                            <div className="font-bold text-sm leading-tight">HaulFlow</div>div>
-                                            <div className="text-xs text-brand-300 truncate max-w-[120px]">{company?.name}</div>div>
-                                </div>div>
-                      </div>div>
+                                            <div className="font-bold text-sm leading-tight">HaulFlow</div>
+                                            <div className="text-xs text-brand-300 truncate max-w-[120px]">{company?.name}</div>
+                                </div>
+                      </div>
               
                       <nav className="flex-1 py-4 space-y-1 px-2 overflow-y-auto">
                         {nav.map(({ id, label, icon: Icon }) => (
@@ -75,18 +75,18 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
                                                     >
                                                     <Icon className="w-4 h-4" />
                                         {label}
-                                      </button>button>
+                                      </button>
                                     ))}
-                      </nav>nav>
+                      </nav>
               
                       <div className="p-3 border-t border-brand-700">
-                                <div className="text-xs text-brand-300 px-2 mb-2 truncate">{user?.email}</div>div>
+                                <div className="text-xs text-brand-300 px-2 mb-2 truncate">{user?.email}</div>
                                 <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-brand-200 hover:bg-brand-800 transition">
                                             <LogOut className="w-4 h-4" />
                                             Sign out
-                                </button>button>
-                      </div>div>
-              </aside>aside>
+                                </button>
+                      </div>
+              </aside>
         
           {/* Desktop hover trigger strip */}
               <div
@@ -102,13 +102,13 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
                       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 lg:hidden">
                                 <button onClick={() => setMobileOpen(true)} className="p-1 rounded-lg hover:bg-gray-100">
                                             <Menu className="w-5 h-5" />
-                                </button>button>
+                                </button>
                                 <span className="font-semibold text-gray-800">{nav.find(n => n.id === activeTab)?.label}</span>span>
-                      </header>header>
+                      </header>
                       <main className="flex-1 overflow-y-auto p-4 lg:p-6">
                         {children}
-                      </main>main>
-              </div>div>
-        </div>div>
+                      </main>
+              </div>
+        </div>
       );
 }</div>
