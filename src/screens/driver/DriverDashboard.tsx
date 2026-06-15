@@ -499,7 +499,7 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
                             >
                             <ClipboardList className="w-5 h-5" />
                             Inspection
-                  </button></button>
+                  </button>
         </div>
       )}
 
