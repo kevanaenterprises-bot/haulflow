@@ -465,6 +465,91 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
     res.status(500).json({ error: 'Failed to update load status', details: err.message });
   }
 });
+// ---------------------------------------------------------------------------
+// Self-Service Onboarding — POST /api/onboard
+// Creates a new company + admin user, returns auto-login token
+// ---------------------------------------------------------------------------
+app.post('/api/onboard', async (req, res) => {
+    try {
+          const {
+                  company_name, company_email, company_phone,
+                  mc_number, dot_number,
+                  admin_name, admin_email, password,
+          } = req.body || {};
+
+          if (!company_name || !admin_name || !admin_email || !password) {
+                  return res.status(400).json({ error: 'Company name, your name, email, and password are required.' });
+          }
+          if (password.length < 6) {
+                  return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+          }
+
+          // Check if email already exists
+          const existing = await pool.query('SELECT id FROM users WHERE email = $1', [admin_email.toLowerCase().trim()]);
+          if (existing.rows.length > 0) {
+                  return res.status(409).json({ error: 'An account with that email already exists. Please log in instead.' });
+          }
+
+          const password_hash = crypto.createHash('sha256').update(password).digest('hex');
+
+          // Create company
+          const companyResult = await pool.query(
+                  `INSERT INTO companies (name, email, phone, subscription_status)
+                         VALUES ($1, $2, $3, 'trial')
+                                RETURNING *`,
+                  [company_name.trim(), company_email || null, company_phone || null]
+                );
+          const company = companyResult.rows[0];
+
+          // Store MC/DOT if provided
+          if (mc_number || dot_number) {
+                  await pool.query(
+                            `UPDATE companies SET mc_number = $1, dot_number = $2 WHERE id = $3`,
+                            [mc_number || null, dot_number || null, company.id]
+                          ).catch(() => {}); // columns may not exist yet — non-fatal
+          }
+
+          // Create admin user
+          const userResult = await pool.query(
+                  `INSERT INTO users (company_id, name, email, password_hash, role)
+                         VALUES ($1, $2, $3, $4, 'admin')
+                                RETURNING *`,
+                  [company.id, admin_name.trim(), admin_email.toLowerCase().trim(), password_hash]
+                );
+          const user = userResult.rows[0];
+
+          // Build token (same simple format as the rest of the app)
+          const payload = {
+                  user_id: user.id,
+                  company_id: company.id,
+                  email: user.email,
+                  role: user.role,
+          };
+          const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64')}.sig`;
+
+          console.log(`[ONBOARD] New company created: ${company_name} (${company.id}) — admin: ${admin_email}`);
+
+          res.json({
+                  token,
+                  user: {
+                            id: user.id,
+                            email: user.email,
+                            name: user.name,
+                            role: user.role,
+                            company_id: company.id,
+                            company_name: company.name,
+                  },
+                  company: {
+                            id: company.id,
+                            name: company.name,
+                  },
+          });
+    } catch (err) {
+          console.error('[ONBOARD] Error:', err.message);
+          res.status(500).json({ error: 'Failed to create account. Please try again.' });
+    }
+});
+
 
 // ---------------------------------------------------------------------------
 // DVIR routes
