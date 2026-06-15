@@ -1419,4 +1419,4 @@ function PreTripInspection({
                 </div>
           </div>
         );
-}</div>
+}
