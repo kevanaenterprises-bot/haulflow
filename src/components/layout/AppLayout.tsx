@@ -111,4 +111,4 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
               </div>
         </div>
       );
-}</div>
+}
