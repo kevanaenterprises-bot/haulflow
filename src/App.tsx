@@ -17,98 +17,96 @@ import SettingsView from './screens/SettingsView';
 import FleetMapView from './screens/FleetMapView';
 import IFTAReportView from './screens/IFTAReportView';
 import TrucksView from './screens/TrucksView';
+import InspectionsView from './screens/InspectionsView';
 import DriverLoginPage from './screens/driver/DriverLoginPage';
 import DriverDashboard from './screens/driver/DriverDashboard';
 import PrivacyPolicyPage from './screens/PrivacyPolicyPage';
 
-type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'settings';
+type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'inspections' | 'settings';
 
 function DriverPortal() {
-  const stored = localStorage.getItem('hf_driver');
-  const [driver, setDriver] = useState(stored ? JSON.parse(stored) : null);
+    const stored = localStorage.getItem('hf_driver');
+    const [driver, setDriver] = useState(stored ? JSON.parse(stored) : null);
 
   if (!driver) {
-    return <DriverLoginPage onLogin={(_token, d) => setDriver(d)} />;
+        return <DriverLoginPage onLogin={(_token, d) => setDriver(d)} />;
   }
-  return (
-    <DriverDashboard
-      driver={driver}
-      onLogout={() => {
-        localStorage.removeItem('hf_driver_token');
-        localStorage.removeItem('hf_driver');
-        setDriver(null);
-      }}
-    />
-  );
+    return (
+          <DriverDashboard
+                  driver={driver}
+                  onLogout={() => {
+                            localStorage.removeItem('hf_driver_token');
+                            localStorage.removeItem('hf_driver');
+                            setDriver(null);
+                  }}
+                />
+        );
 }
 
 function Inner() {
-  const { user, loading } = useAuth();
-  const [tab, setTab] = useState<Tab>('loads');
+    const { user, loading } = useAuth();
+    const [tab, setTab] = useState<Tab>('loads');
 
   if (loading) {
+        return (
+                <div className="flex items-center justify-center h-screen bg-gray-50">
+                        <div className="text-gray-400 text-sm">Loading...</div>div>
+                </div>div>
+              );
+  }
+  
+    if (window.location.pathname === '/onboard') {
+          return <OnboardingPage />;
+    }
+  
+    if (!user) {
+          return <LoginPage />;
+    }
+  
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-gray-400 text-sm">Loading...</div>
-      </div>
-    );
-  }
-
-  if (window.location.pathname === '/onboard') {
-    return <OnboardingPage />;
-  }
-
-  if (!user) {
-    return <LoginPage />;
-  }
-
-  return (
-    <AppLayout activeTab={tab} onTabChange={setTab}>
-      {tab === 'loads' && <LoadsView onNavigate={(t) => setTab(t as Tab)} />}
-      {tab === 'drivers' && <DriversView />}
-      {tab === 'customers' && <CustomersView />}
-      {tab === 'invoices' && <InvoicesView />}
-      {tab === 'paid' && <PaidInvoicesView />}
-      {tab === 'shippers' && <ShippersView />}
-      {tab === 'employees' && <EmployeesView />}
-      {tab === 'trucks' && <TrucksView />}
-      {tab === 'fleet' && <FleetMapView />}
-      {tab === 'ifta' && <IFTAReportView />}
-      {tab === 'settings' && <SettingsView />}
-    </AppLayout>
-  );
+          <AppLayout activeTab={tab} onTabChange={setTab}>
+            {tab === 'loads' && <LoadsView onNavigate={(t) => setTab(t as Tab)} />}
+            {tab === 'drivers' && <DriversView />}
+            {tab === 'customers' && <CustomersView />}
+            {tab === 'invoices' && <InvoicesView />}
+            {tab === 'paid' && <PaidInvoicesView />}
+            {tab === 'shippers' && <ShippersView />}
+            {tab === 'employees' && <EmployeesView />}
+            {tab === 'trucks' && <TrucksView />}
+            {tab === 'fleet' && <FleetMapView />}
+            {tab === 'ifta' && <IFTAReportView />}
+            {tab === 'inspections' && <InspectionsView />}
+            {tab === 'settings' && <SettingsView />}
+          </AppLayout>AppLayout>
+        );
 }
 
 export default function App() {
-  const path = window.location.pathname;
-
-  if (path === '/privacy') {
-    return <PrivacyPolicyPage />;
-  }
-
-  // Demo request landing page — no auth required
-  if (path === '/demo' || path === '/demo/') {
-    return <DemoRequestPage />;
-  }
-
-  // Subscription / payment gateway transition page — between Demo and Dashboard
-  if (path === '/subscribe' || path === '/subscribe/') {
-    return <SubscribePage />;
-  }
-
-  // Self-Service Onboarding Wizard — post-Stripe payment setup flow
-  if (path === '/setup' || path === '/setup/') {
-    return <SetupWizardPage />;
-  }
-
-  // Detect driver portal before auth context loads — avoids any admin auth interference
-  if (path.startsWith('/driver')) {
-    return <DriverPortal />;
-  }
-
-  return (
-    <AuthProvider>
-      <Inner />
-    </AuthProvider>
-  );
-}
+    const path = window.location.pathname;
+  
+    if (path === '/privacy') {
+          return <PrivacyPolicyPage />;
+    }
+  
+    if (path === '/demo' || path === '/demo/') {
+          return <DemoRequestPage />;
+    }
+  
+    if (path === '/subscribe' || path === '/subscribe/') {
+          return <SubscribePage />;
+    }
+  
+    if (path === '/setup' || path === '/setup/') {
+          return <SetupWizardPage />;
+    }
+  
+    if (path.startsWith('/driver')) {
+          return <DriverPortal />;
+    }
+  
+    return (
+          <AuthProvider>
+                <Inner />
+          </AuthProvider>AuthProvider>
+        );
+}</div>
