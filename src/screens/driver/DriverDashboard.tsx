@@ -499,7 +499,7 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
                             >
                             <ClipboardList className="w-5 h-5" />
                             Inspection
-                  </button>button></button>
+                  </button></button>
         </div>
       )}
 
@@ -1152,8 +1152,8 @@ function PreTripInspection({
   if (checkingToday) {
         return (
                 <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-                        <p className="text-gray-400 text-sm">Checking inspection status...</p>p>
-                </div>div>
+                        <p className="text-gray-400 text-sm">Checking inspection status...</p>
+                </div>
               );
   }
   
@@ -1164,9 +1164,9 @@ function PreTripInspection({
                           <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
                                     <button onClick={onBack} className="flex items-center gap-1 text-gray-400 text-sm mb-3">
                                                 <ArrowLeft className="w-4 h-4" /> Back
-                                    </button>button>
-                                    <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>h1>
-                          </div>div>
+                                    </button>
+                                    <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>
+                          </div>
                           <div className="px-4 py-8 flex flex-col items-center text-center gap-4">
                                     <div className={cn(
                                 'w-16 h-16 rounded-full flex items-center justify-center',
@@ -1176,21 +1176,21 @@ function PreTripInspection({
                                                       ? <CheckCircle className="w-8 h-8 text-green-400" />
                                                       : <AlertTriangle className="w-8 h-8 text-red-400" />
                                       }
-                                    </div>div>
+                                    </div>
                                     <div>
                                                 <h2 className="text-lg font-bold text-white">
                                                   {todayInspection.overall_status === 'pass' ? "Today's inspection passed" : "Today's inspection has defects"}
-                                                </h2>h2>
+                                                </h2>
                                                 <p className="text-gray-400 text-sm mt-1">
                                                               Submitted at {new Date(todayInspection.submitted_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                                                </p>p>
+                                                </p>
                                       {todayInspection.has_defects && (
-                                  <p className="text-red-400 text-sm mt-2">Defects were reported and your fleet manager has been notified.</p>p>
+                                  <p className="text-red-400 text-sm mt-2">Defects were reported and your fleet manager has been notified.</p>
                                                 )}
-                                    </div>div>
-                                    <p className="text-gray-500 text-xs">You have already completed your pre-trip inspection for today. Come back tomorrow.</p>p>
-                          </div>div>
-                  </div>div>
+                                    </div>
+                                    <p className="text-gray-500 text-xs">You have already completed your pre-trip inspection for today. Come back tomorrow.</p>
+                          </div>
+                  </div>
                 );
     }
   
@@ -1200,8 +1200,8 @@ function PreTripInspection({
           return (
                   <div className="min-h-screen bg-gray-900 text-white pb-24">
                           <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
-                                    <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>h1>
-                          </div>div>
+                                    <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>
+                          </div>
                           <div className="px-4 py-8 flex flex-col items-center text-center gap-4">
                                     <div className={cn(
                                 'w-16 h-16 rounded-full flex items-center justify-center',
@@ -1211,25 +1211,25 @@ function PreTripInspection({
                                                       ? <AlertTriangle className="w-8 h-8 text-red-400" />
                                                       : <CheckCircle className="w-8 h-8 text-green-400" />
                                       }
-                                    </div>div>
+                                    </div>
                                     <div>
                                                 <h2 className="text-lg font-bold text-white">
                                                   {hasDefects ? 'Inspection Submitted — Defects Reported' : 'Inspection Complete — All Clear'}
-                                                </h2>h2>
+                                                </h2>
                                                 <p className="text-gray-400 text-sm mt-2">
                                                   {hasDefects
                                                                     ? `${failedItems.length} item${failedItems.length > 1 ? 's' : ''} flagged. Your fleet manager has been notified.`
                                                                     : `All ${passedItems.length} items passed. You're good to roll.`}
-                                                </p>p>
-                                    </div>div>
+                                                </p>
+                                    </div>
                                     <button
                                                   onClick={onBack}
                                                   className="mt-4 bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-xl font-bold transition"
                                                 >
                                                 Back to Dashboard
-                                    </button>button>
-                          </div>div>
-                  </div>div>
+                                    </button>
+                          </div>
+                  </div>
                 );
     }
   
@@ -1239,17 +1239,17 @@ function PreTripInspection({
                 <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
                         <button onClick={onBack} className="flex items-center gap-1 text-gray-400 text-sm mb-3">
                                   <ArrowLeft className="w-4 h-4" /> Back
-                        </button>button>
-                        <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>h1>
-                        <p className="text-gray-400 text-sm mt-0.5">Walk around your truck and check each item</p>p>
-                </div>div>
+                        </button>
+                        <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>
+                        <p className="text-gray-400 text-sm mt-0.5">Walk around your truck and check each item</p>
+                </div>
           
                 <div className="px-4 py-5 space-y-4">
                   {/* Truck unit # */}
                         <div className="bg-gray-800 rounded-2xl border border-gray-700 p-4">
                                   <label className="block text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">
-                                              Truck / Unit # <span className="text-gray-600 font-normal">(optional)</span>span>
-                                  </label>label>
+                                              Truck / Unit # <span className="text-gray-600 font-normal">(optional)</span>
+                                  </label>
                                   <input
                                                 type="text"
                                                 value={truckUnit}
@@ -1257,7 +1257,7 @@ function PreTripInspection({
                                                 placeholder="e.g. Truck 42"
                                                 className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 text-base"
                                               />
-                        </div>div>
+                        </div>
                 
                   {/* Progress */}
                         <div className="flex items-center gap-3 text-sm">
@@ -1266,11 +1266,11 @@ function PreTripInspection({
                                                               className="h-2 bg-brand-500 rounded-full transition-all duration-300"
                                                               style={{ width: `${(items.filter(i => i.status !== 'pending').length / items.length) * 100}%` }}
                                                             />
-                                  </div>div>
+                                  </div>
                                   <span className="text-gray-400 text-xs flex-shrink-0">
                                     {items.filter(i => i.status !== 'pending').length}/{items.length} reviewed
-                                  </span>span>
-                        </div>div>
+                                  </span>
+                        </div>
                 
                   {/* Inspection items */}
                         <div className="space-y-3">
@@ -1287,7 +1287,7 @@ function PreTripInspection({
                                       <div className="p-4">
                                         {/* Item name + pass/fail buttons */}
                                                       <div className="flex items-center justify-between gap-3 mb-3">
-                                                                        <span className="font-medium text-white">{item.name}</span>span>
+                                                                        <span className="font-medium text-white">{item.name}</span>
                                                                         <div className="flex gap-2 flex-shrink-0">
                                                                                             <button
                                                                                                                     onClick={() => setItemStatus(idx, 'pass')}
@@ -1299,7 +1299,7 @@ function PreTripInspection({
                                                                                                                                             )}
                                                                                                                   >
                                                                                                                   ✓ Pass
-                                                                                              </button>button>
+                                                                                              </button>
                                                                                             <button
                                                                                                                     onClick={() => setItemStatus(idx, 'fail')}
                                                                                                                     className={cn(
@@ -1310,9 +1310,9 @@ function PreTripInspection({
                                                                                                                                             )}
                                                                                                                   >
                                                                                                                   ✗ Fail
-                                                                                              </button>button>
-                                                                        </div>div>
-                                                      </div>div>
+                                                                                              </button>
+                                                                        </div>
+                                                      </div>
                                       
                                         {/* Notes + photo — only shown when fail */}
                                         {item.status === 'fail' && (
@@ -1333,11 +1333,11 @@ function PreTripInspection({
                                                                                                                                       className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 border border-dashed border-gray-500 rounded-xl py-3 text-sm font-medium text-gray-300 transition"
                                                                                                                                     >
                                                                                                                                     <Camera className="w-4 h-4 text-brand-400" />
-                                                                                                                                    Take Photo <span className="text-red-400 ml-1">*</span>span>
-                                                                                                            </button>button>
+                                                                                                                                    Take Photo <span className="text-red-400 ml-1">*</span>
+                                                                                                            </button>
                                                                                                           <p className="text-xs text-amber-400 mt-1.5 flex items-center gap-1">
                                                                                                                                     <AlertTriangle className="w-3 h-3" /> Photo required for failed items
-                                                                                                            </p>p>
+                                                                                                            </p>
                                                                                     {/* Camera-only input — no accept of gallery images */}
                                                                                                           <input
                                                                                                                                       ref={el => { cameraRefs.current[idx] = el; }}
@@ -1347,7 +1347,7 @@ function PreTripInspection({
                                                                                                                                       className="hidden"
                                                                                                                                       onChange={e => handleCameraCapture(idx, e.target.files)}
                                                                                                                                     />
-                                                                                    </div>div>
+                                                                                    </div>
                                                                                 ) : (
                                                                                   <div className="relative">
                                                                                                           <img
@@ -1360,19 +1360,19 @@ function PreTripInspection({
                                                                                                                                       className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5"
                                                                                                                                     >
                                                                                                                                     <X className="w-3.5 h-3.5 text-white" />
-                                                                                                            </button>button>
+                                                                                                            </button>
                                                                                                           <div className="absolute bottom-2 left-2 bg-black/60 rounded-lg px-2 py-0.5 flex items-center gap-1">
                                                                                                                                     <Camera className="w-3 h-3 text-green-400" />
-                                                                                                                                    <span className="text-xs text-green-400 font-medium">Photo captured</span>span>
-                                                                                                            </div>div>
-                                                                                    </div>div>
+                                                                                                                                    <span className="text-xs text-green-400 font-medium">Photo captured</span>
+                                                                                                            </div>
+                                                                                    </div>
                                                                               )}
-                                                          </div>div>
+                                                          </div>
                                                       )}
-                                      </div>div>
-                        </div>div>
+                                      </div>
+                        </div>
                       ))}
-                        </div>div>
+                        </div>
                 
                   {/* Validation messages */}
                   {failsMissingPhoto.length > 0 && (
@@ -1380,11 +1380,11 @@ function PreTripInspection({
                                   <p className="text-sm text-amber-400 font-medium flex items-center gap-1.5">
                                                 <AlertTriangle className="w-4 h-4" />
                                                 Photo required for: {failsMissingPhoto.map(i => i.name).join(', ')}
-                                  </p>p>
-                      </div>div>
+                                  </p>
+                      </div>
                         )}
                 
-                  {error && <p className="text-sm text-red-400 bg-red-900/30 px-4 py-3 rounded-xl">{error}</p>p>}
+                  {error && <p className="text-sm text-red-400 bg-red-900/30 px-4 py-3 rounded-xl">{error}</p>}
                 
                   {/* Submit */}
                         <button
@@ -1401,22 +1401,22 @@ function PreTripInspection({
                                        !allReviewed ? `Review all ${items.filter(i => i.status === 'pending').length} remaining items` :
                                        failsMissingPhoto.length > 0 ? 'Add photos for failed items' :
                                        'Submit Inspection'}
-                        </button>button>
+                        </button>
                 
                   {/* Checklist summar */}
                         <div className="space-y-1.5 pb-4">
                                   <div className={cn('flex items-center gap-2 text-sm', allReviewed ? 'text-green-400' : 'text-gray-500')}>
                                               <CheckCircle className={cn('w-4 h-4', allReviewed ? 'text-green-400' : 'text-gray-600')} />
                                               All items reviewed ({items.filter(i => i.status !== 'pending').length}/{items.length})
-                                  </div>div>
+                                  </div>
                           {failedItems.length > 0 && (
                         <div className={cn('flex items-center gap-2 text-sm', failsMissingPhoto.length === 0 ? 'text-green-400' : 'text-amber-400')}>
                                       <Camera className={cn('w-4 h-4', failsMissingPhoto.length === 0 ? 'text-green-400' : 'text-amber-400')} />
                                       Photos for failed items ({failedItems.length - failsMissingPhoto.length}/{failedItems.length})
-                        </div>div>
+                        </div>
                                   )}
-                        </div>div>
-                </div>div>
-          </div>div>
+                        </div>
+                </div>
+          </div>
         );
 }</div>
