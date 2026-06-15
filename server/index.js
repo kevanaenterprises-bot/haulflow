@@ -549,6 +549,52 @@ app.post('/api/onboard', async (req, res) => {
           res.status(500).json({ error: 'Failed to create account. Please try again.' });
     }
 });
+// ---------------------------------------------------------------------------
+// Setup Wizard Complete — POST /api/setup/complete
+// Saves company profile + invoice config from the onboarding wizard
+// Called after Stripe payment, from /setup page
+// ---------------------------------------------------------------------------
+app.post('/api/setup/complete', authMiddleware, async (req, res) => {
+    try {
+          const {
+                  // Company profile (Step 1)
+                  legalName, dotNumber, mcNumber, primaryHubAddress, taxId,
+                  // Invoice config (Step 4)
+                  startingInvoiceNumber, billingPhone, billingEmail, shopAlertEmail,
+          } = req.body || {};
+
+          const company_id = req.user.company_id;
+
+          // Build update fields
+          const updates = [];
+          const values = [];
+          let idx = 1;
+
+          if (legalName) { updates.push(`name = $${idx++}`); values.push(legalName); }
+          if (dotNumber) { updates.push(`dot_number = $${idx++}`); values.push(dotNumber); }
+          if (mcNumber) { updates.push(`mc_number = $${idx++}`); values.push(mcNumber); }
+          if (primaryHubAddress) { updates.push(`address = $${idx++}`); values.push(primaryHubAddress); }
+          if (billingPhone) { updates.push(`phone = $${idx++}`); values.push(billingPhone); }
+          if (billingEmail) { updates.push(`email = $${idx++}`); values.push(billingEmail); }
+          if (shopAlertEmail) { updates.push(`shop_alert_email = $${idx++}`); values.push(shopAlertEmail); }
+          if (startingInvoiceNumber) { updates.push(`invoice_counter = $${idx++}`); values.push(parseInt(startingInvoiceNumber, 10) || 1001); }
+
+          if (updates.length > 0) {
+                  values.push(company_id);
+                  await pool.query(
+                            `UPDATE companies SET ${updates.join(', ')} WHERE id = $${idx}`,
+                            values
+                          );
+          }
+
+          console.log(`[SETUP] Company ${company_id} setup complete`);
+          res.json({ success: true });
+    } catch (err) {
+          console.error('[SETUP] Error:', err.message);
+          res.status(500).json({ error: 'Failed to save setup. Please try again.' });
+    }
+});
+
 
 
 // ---------------------------------------------------------------------------
