@@ -1064,359 +1064,212 @@ interface InspectionItemState {
     photo_preview: string | null;
 }
 
-function PreTripInspection({
-    driver,
-    onBack,
-}: {
-    driver: any;
-    onBack: () => void;
-}) {
-    const [items, setItems] = useState<InspectionItemState[]>(
-          INSPECTION_ITEMS.map(name => ({ name, status: 'pending', notes: '', photo_url: null, photo_preview: null }))
-        );
-    const [truckUnit, setTruckUnit] = useState('');
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
-    const [error, setError] = useState('');
-    const [activePhoto, setActivePhoto] = useState<number | null>(null);
-    const cameraRefs = useRef<(HTMLInputElement | null)[]>([]);
-    const [todayInspection, setTodayInspection] = useState<any>(null);
-    const [checkingToday, setCheckingToday] = useState(true);
+function PreTripInspection({ driver, onBack }: { driver: any; onBack: () => void }) {
+  const ITEMS = [
+    'Tires & Wheels', 'Brakes', 'Lights & Reflectors', 'Horn',
+    'Windshield & Wipers', 'Mirrors', 'Fluids', 'Coupling Devices',
+    'Emergency Equipment', 'Cargo Securement',
+  ];
 
-  // Check if driver already submitted today
-  useEffect(() => {
-        driverApi('/api/driver/dvir/today')
-          .then(data => { setTodayInspection(data.inspection || null); })
-          .catch(() => {})
-          .finally(() => setCheckingToday(false));
+  type ItemStatus = 'pending' | 'pass' | 'fail';
+  interface ItemState {
+    status: ItemStatus;
+    notes: string;
+    photo_url: string | null;
+    photo_preview: string | null;
+  }
+
+  const [items, setItems] = React.useState<Record<string, ItemState>>(() =>
+    Object.fromEntries(ITEMS.map(name => [name, { status: 'pending', notes: '', photo_url: null, photo_preview: null }]))
+  );
+  const [submitting, setSubmitting] = React.useState(false);
+  const [alreadyDone, setAlreadyDone] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
+  const [notifiedShop, setNotifiedShop] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const data = await driverApi('/api/driver/dvir/today', 'GET');
+        if (data?.submitted) setAlreadyDone(true);
+      } catch {}
+    })();
   }, []);
 
-  const setItemStatus = (idx: number, status: ItemStatus) => {
-        setItems(prev => prev.map((item, i) => i === idx ? { ...item, status } : item));
+  const setStatus = (name: string, status: ItemStatus) => {
+    setItems(prev => ({ ...prev, [name]: { ...prev[name], status } }));
+  };
+  const setNotes = (name: string, notes: string) => {
+    setItems(prev => ({ ...prev, [name]: { ...prev[name], notes } }));
+  };
+  const handlePhoto = (name: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const preview = ev.target?.result as string;
+      setItems(prev => ({ ...prev, [name]: { ...prev[name], photo_url: preview, photo_preview: preview } }));
+    };
+    reader.readAsDataURL(file);
   };
 
-  const setItemNotes = (idx: number, notes: string) => {
-        setItems(prev => prev.map((item, i) => i === idx ? { ...item, notes } : item));
-  };
-
-  const handleCameraCapture = (idx: number, files: FileList | null) => {
-        if (!files || files.length === 0) return;
-        const file = files[0];
-        const reader = new FileReader();
-        reader.onload = (e) => {
-                const dataUrl = e.target?.result as string;
-                setItems(prev => prev.map((item, i) =>
-                          i === idx ? { ...item, photo_url: dataUrl, photo_preview: dataUrl } : item
-                                                ));
-        };
-        reader.readAsDataURL(file);
-  };
-
-  const removePhoto = (idx: number) => {
-        setItems(prev => prev.map((item, i) =>
-                i === idx ? { ...item, photo_url: null, photo_preview: null } : item
-                                      ));
-  };
-
-  const allReviewed = items.every(item => item.status !== 'pending');
-    const failedItems = items.filter(i => i.status === 'fail');
-    const passedItems = items.filter(i => i.status === 'pass');
-
-  // Failed items must have a photo
-  const failsMissingPhoto = failedItems.filter(i => !i.photo_url);
-
-  const canSubmit = allReviewed && failsMissingPhoto.length === 0;
+  const allReviewed = Object.values(items).every(i => i.status !== 'pending');
+  const failedItems = Object.entries(items).filter(([, v]) => v.status === 'fail');
+  const failsMissingPhoto = failedItems.filter(([, v]) => !v.photo_url).length;
+  const canSubmit = allReviewed && failsMissingPhoto === 0;
+  const reviewed = Object.values(items).filter(i => i.status !== 'pending').length;
 
   const handleSubmit = async () => {
-        if (!canSubmit) return;
-        setSubmitting(true);
-        setError('');
-        try {
-                const payload = {
-                          truck_unit: truckUnit || null,
-                          items: items.map(({ name, status, notes, photo_url }) => ({
-                                      name,
-                                      status,
-                                      notes: notes || undefined,
-                                      photo_url: photo_url || undefined,
-                          })),
-                };
-                await driverApi('/api/driver/dvir/submit', 'POST', payload);
-                setSubmitted(true);
-        } catch (e: any) {
-                setError(e.message);
-        }
-        setSubmitting(false);
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      const payload = {
+        driver_name: driver.name,
+        truck_unit: driver.truck_unit || '',
+        items: Object.entries(items).map(([name, v]) => ({
+          name,
+          status: v.status,
+          notes: v.notes,
+          photo_url: v.photo_url,
+        })),
+      };
+      const result = await driverApi('/api/driver/dvir/submit', 'POST', payload);
+      setNotifiedShop(result?.shop_notified || false);
+      setSubmitted(true);
+    } catch (err: any) {
+      alert('Submission failed: ' + (err.message || 'Unknown error'));
+    }
+    setSubmitting(false);
   };
 
-  if (checkingToday) {
-        return (
-                <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-                        <p className="text-gray-400 text-sm">Checking inspection status...</p>
-                </div>
-              );
-  }
-  
-    // Already submitted today
-    if (todayInspection && !submitted) {
-          return (
-                  <div className="min-h-screen bg-gray-900 text-white pb-24">
-                          <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
-                                    <button onClick={onBack} className="flex items-center gap-1 text-gray-400 text-sm mb-3">
-                                                <ArrowLeft className="w-4 h-4" /> Back
-                                    </button>
-                                    <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>
-                          </div>
-                          <div className="px-4 py-8 flex flex-col items-center text-center gap-4">
-                                    <div className={cn(
-                                'w-16 h-16 rounded-full flex items-center justify-center',
-                                todayInspection.overall_status === 'pass' ? 'bg-green-900/40' : 'bg-red-900/40'
-                              )}>
-                                      {todayInspection.overall_status === 'pass'
-                                                      ? <CheckCircle className="w-8 h-8 text-green-400" />
-                                                      : <AlertTriangle className="w-8 h-8 text-red-400" />
-                                      }
-                                    </div>
-                                    <div>
-                                                <h2 className="text-lg font-bold text-white">
-                                                  {todayInspection.overall_status === 'pass' ? "Today's inspection passed" : "Today's inspection has defects"}
-                                                </h2>
-                                                <p className="text-gray-400 text-sm mt-1">
-                                                              Submitted at {new Date(todayInspection.submitted_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                                                </p>
-                                      {todayInspection.has_defects && (
-                                  <p className="text-red-400 text-sm mt-2">Defects were reported and your fleet manager has been notified.</p>
-                                                )}
-                                    </div>
-                                    <p className="text-gray-500 text-xs">You have already completed your pre-trip inspection for today. Come back tomorrow.</p>
-                          </div>
-                  </div>
-                );
-    }
-  
-    // Submitted successfully
-    if (submitted) {
-          const hasDefects = failedItems.length > 0;
-          return (
-                  <div className="min-h-screen bg-gray-900 text-white pb-24">
-                          <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
-                                    <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>
-                          </div>
-                          <div className="px-4 py-8 flex flex-col items-center text-center gap-4">
-                                    <div className={cn(
-                                'w-16 h-16 rounded-full flex items-center justify-center',
-                                hasDefects ? 'bg-red-900/40' : 'bg-green-900/40'
-                              )}>
-                                      {hasDefects
-                                                      ? <AlertTriangle className="w-8 h-8 text-red-400" />
-                                                      : <CheckCircle className="w-8 h-8 text-green-400" />
-                                      }
-                                    </div>
-                                    <div>
-                                                <h2 className="text-lg font-bold text-white">
-                                                  {hasDefects ? 'Inspection Submitted — Defects Reported' : 'Inspection Complete — All Clear'}
-                                                </h2>
-                                                <p className="text-gray-400 text-sm mt-2">
-                                                  {hasDefects
-                                                                    ? `${failedItems.length} item${failedItems.length > 1 ? 's' : ''} flagged. Your fleet manager has been notified.`
-                                                                    : `All ${passedItems.length} items passed. You're good to roll.`}
-                                                </p>
-                                    </div>
-                                    <button
-                                                  onClick={onBack}
-                                                  className="mt-4 bg-brand-600 hover:bg-brand-500 text-white px-6 py-3 rounded-xl font-bold transition"
-                                                >
-                                                Back to Dashboard
-                                    </button>
-                          </div>
-                  </div>
-                );
-    }
-  
+  if (alreadyDone) {
     return (
-          <div className="min-h-screen bg-gray-900 text-white pb-32">
-            {/* Header */}
-                <div className="bg-gray-800 border-b border-gray-700 px-4 pt-10 pb-4">
-                        <button onClick={onBack} className="flex items-center gap-1 text-gray-400 text-sm mb-3">
-                                  <ArrowLeft className="w-4 h-4" /> Back
-                        </button>
-                        <h1 className="text-xl font-bold">Pre-Trip Inspection</h1>
-                        <p className="text-gray-400 text-sm mt-0.5">Walk around your truck and check each item</p>
+      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
+        <CheckCircle className="w-16 h-16 text-green-400 mb-4" />
+        <h2 className="text-xl font-bold mb-2">Inspection Already Submitted</h2>
+        <p className="text-gray-400 text-sm text-center mb-6">You already completed your pre-trip inspection today.</p>
+        <button onClick={onBack} className="bg-brand-500 hover:bg-brand-600 text-white px-6 py-2 rounded-xl font-semibold">
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    const passCount = Object.values(items).filter(i => i.status === 'pass').length;
+    const failCount = Object.values(items).filter(i => i.status === 'fail').length;
+    return (
+      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-6">
+        <CheckCircle className="w-16 h-16 text-green-400 mb-4" />
+        <h2 className="text-xl font-bold mb-2">Inspection Submitted!</h2>
+        <div className="flex gap-4 mb-4">
+          <span className="text-green-400">{passCount} Pass</span>
+          <span className="text-red-400">{failCount} Fail</span>
+        </div>
+        {notifiedShop && <p className="text-yellow-400 text-sm mb-4">Fleet manager has been notified of defects.</p>}
+        <button onClick={onBack} className="bg-brand-500 hover:bg-brand-600 text-white px-6 py-2 rounded-xl font-semibold">
+          Back to Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+      <div className="flex items-center gap-3 px-4 py-4 bg-gray-900 border-b border-gray-800">
+        <button onClick={onBack} className="p-2 rounded-lg hover:bg-gray-800 transition">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div>
+          <h1 className="font-bold text-lg">Pre-Trip Inspection</h1>
+          <p className="text-xs text-gray-400">{driver.name} &middot; {new Date().toLocaleDateString()}</p>
+        </div>
+        <div className="ml-auto text-xs text-gray-400">{reviewed}/{ITEMS.length} reviewed</div>
+      </div>
+
+      <div className="h-1 bg-gray-800">
+        <div
+          className="h-1 bg-brand-500 transition-all duration-300"
+          style={{ width: String(Math.round((reviewed / ITEMS.length) * 100)) + '%' }}
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {ITEMS.map(name => {
+          const item = items[name];
+          return (
+            <div key={name} className="bg-gray-900 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium text-sm">{name}</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setStatus(name, 'pass')}
+                    className={'px-3 py-1 rounded-lg text-xs font-semibold transition ' + (item.status === 'pass' ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600')}
+                  >
+                    Pass
+                  </button>
+                  <button
+                    onClick={() => setStatus(name, 'fail')}
+                    className={'px-3 py-1 rounded-lg text-xs font-semibold transition ' + (item.status === 'fail' ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600')}
+                  >
+                    Fail
+                  </button>
                 </div>
-          
-                <div className="px-4 py-5 space-y-4">
-                  {/* Truck unit # */}
-                        <div className="bg-gray-800 rounded-2xl border border-gray-700 p-4">
-                                  <label className="block text-xs text-gray-400 uppercase tracking-wide font-medium mb-2">
-                                              Truck / Unit # <span className="text-gray-600 font-normal">(optional)</span>
-                                  </label>
-                                  <input
-                                                type="text"
-                                                value={truckUnit}
-                                                onChange={e => setTruckUnit(e.target.value)}
-                                                placeholder="e.g. Truck 42"
-                                                className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 text-base"
-                                              />
-                        </div>
-                
-                  {/* Progress */}
-                        <div className="flex items-center gap-3 text-sm">
-                                  <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
-                                              <div
-                                                              className="h-2 bg-brand-500 rounded-full transition-all duration-300"
-                                                              style={{ width: `${(items.filter(i => i.status !== 'pending').length / items.length) * 100}%` }}
-                                                            />
-                                  </div>
-                                  <span className="text-gray-400 text-xs flex-shrink-0">
-                                    {items.filter(i => i.status !== 'pending').length}/{items.length} reviewed
-                                  </span>
-                        </div>
-                
-                  {/* Inspection items */}
-                        <div className="space-y-3">
-                          {items.map((item, idx) => (
-                        <div
-                                        key={item.name}
-                                        className={cn(
-                                                          'bg-gray-800 rounded-2xl border overflow-hidden transition',
-                                                          item.status === 'pass' ? 'border-green-700/50' :
-                                                          item.status === 'fail' ? 'border-red-700/50' :
-                                                          'border-gray-700'
-                                                        )}
-                                      >
-                                      <div className="p-4">
-                                        {/* Item name + pass/fail buttons */}
-                                                      <div className="flex items-center justify-between gap-3 mb-3">
-                                                                        <span className="font-medium text-white">{item.name}</span>
-                                                                        <div className="flex gap-2 flex-shrink-0">
-                                                                                            <button
-                                                                                                                    onClick={() => setItemStatus(idx, 'pass')}
-                                                                                                                    className={cn(
-                                                                                                                                              'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
-                                                                                                                                              item.status === 'pass'
-                                                                                                                                                ? 'bg-green-600 text-white'
-                                                                                                                                                : 'bg-gray-700 text-gray-400 hover:bg-green-900/40 hover:text-green-400'
-                                                                                                                                            )}
-                                                                                                                  >
-                                                                                                                  ✓ Pass
-                                                                                              </button>
-                                                                                            <button
-                                                                                                                    onClick={() => setItemStatus(idx, 'fail')}
-                                                                                                                    className={cn(
-                                                                                                                                              'px-3 py-1.5 rounded-lg text-sm font-semibold transition',
-                                                                                                                                              item.status === 'fail'
-                                                                                                                                                ? 'bg-red-600 text-white'
-                                                                                                                                                : 'bg-gray-700 text-gray-400 hover:bg-red-900/40 hover:text-red-400'
-                                                                                                                                            )}
-                                                                                                                  >
-                                                                                                                  ✗ Fail
-                                                                                              </button>
-                                                                        </div>
-                                                      </div>
-                                      
-                                        {/* Notes + photo — only shown when fail */}
-                                        {item.status === 'fail' && (
-                                                          <div className="space-y-3 pt-2 border-t border-gray-700">
-                                                                              <input
-                                                                                                      type="text"
-                                                                                                      value={item.notes}
-                                                                                                      onChange={e => setItemNotes(idx, e.target.value)}
-                                                                                                      placeholder="Describe the issue..."
-                                                                                                      className="w-full bg-gray-700 border border-gray-600 rounded-xl px-3 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 text-sm"
-                                                                                                    />
-                                                          
-                                                            {/* Camera capture — camera only, no gallery */}
-                                                            {!item.photo_preview ? (
-                                                                                  <div>
-                                                                                                          <button
-                                                                                                                                      onClick={() => cameraRefs.current[idx]?.click()}
-                                                                                                                                      className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 border border-dashed border-gray-500 rounded-xl py-3 text-sm font-medium text-gray-300 transition"
-                                                                                                                                    >
-                                                                                                                                    <Camera className="w-4 h-4 text-brand-400" />
-                                                                                                                                    Take Photo <span className="text-red-400 ml-1">*</span>
-                                                                                                            </button>
-                                                                                                          <p className="text-xs text-amber-400 mt-1.5 flex items-center gap-1">
-                                                                                                                                    <AlertTriangle className="w-3 h-3" /> Photo required for failed items
-                                                                                                            </p>
-                                                                                    {/* Camera-only input — no accept of gallery images */}
-                                                                                                          <input
-                                                                                                                                      ref={el => { cameraRefs.current[idx] = el; }}
-                                                                                                                                      type="file"
-                                                                                                                                      accept="image/*"
-                                                                                                                                      capture="environment"
-                                                                                                                                      className="hidden"
-                                                                                                                                      onChange={e => handleCameraCapture(idx, e.target.files)}
-                                                                                                                                    />
-                                                                                    </div>
-                                                                                ) : (
-                                                                                  <div className="relative">
-                                                                                                          <img
-                                                                                                                                      src={item.photo_preview}
-                                                                                                                                      alt={`${item.name} photo`}
-                                                                                                                                      className="w-full h-40 object-cover rounded-xl border border-gray-600"
-                                                                                                                                    />
-                                                                                                          <button
-                                                                                                                                      onClick={() => removePhoto(idx)}
-                                                                                                                                      className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5"
-                                                                                                                                    >
-                                                                                                                                    <X className="w-3.5 h-3.5 text-white" />
-                                                                                                            </button>
-                                                                                                          <div className="absolute bottom-2 left-2 bg-black/60 rounded-lg px-2 py-0.5 flex items-center gap-1">
-                                                                                                                                    <Camera className="w-3 h-3 text-green-400" />
-                                                                                                                                    <span className="text-xs text-green-400 font-medium">Photo captured</span>
-                                                                                                            </div>
-                                                                                    </div>
-                                                                              )}
-                                                          </div>
-                                                      )}
-                                      </div>
-                        </div>
-                      ))}
-                        </div>
-                
-                  {/* Validation messages */}
-                  {failsMissingPhoto.length > 0 && (
-                      <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl p-3">
-                                  <p className="text-sm text-amber-400 font-medium flex items-center gap-1.5">
-                                                <AlertTriangle className="w-4 h-4" />
-                                                Photo required for: {failsMissingPhoto.map(i => i.name).join(', ')}
-                                  </p>
-                      </div>
-                        )}
-                
-                  {error && <p className="text-sm text-red-400 bg-red-900/30 px-4 py-3 rounded-xl">{error}</p>}
-                
-                  {/* Submit */}
-                        <button
-                                    onClick={handleSubmit}
-                                    disabled={!canSubmit || submitting}
-                                    className={cn(
-                                                  'w-full py-4 rounded-2xl font-bold text-base transition',
-                                                  canSubmit && !submitting
-                                                    ? 'bg-brand-600 hover:bg-brand-500 text-white shadow-lg'
-                                                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                                )}
-                                  >
-                          {submitting ? 'Submitting...' :
-                                       !allReviewed ? `Review all ${items.filter(i => i.status === 'pending').length} remaining items` :
-                                       failsMissingPhoto.length > 0 ? 'Add photos for failed items' :
-                                       'Submit Inspection'}
-                        </button>
-                
-                  {/* Checklist summar */}
-                        <div className="space-y-1.5 pb-4">
-                                  <div className={cn('flex items-center gap-2 text-sm', allReviewed ? 'text-green-400' : 'text-gray-500')}>
-                                              <CheckCircle className={cn('w-4 h-4', allReviewed ? 'text-green-400' : 'text-gray-600')} />
-                                              All items reviewed ({items.filter(i => i.status !== 'pending').length}/{items.length})
-                                  </div>
-                          {failedItems.length > 0 && (
-                        <div className={cn('flex items-center gap-2 text-sm', failsMissingPhoto.length === 0 ? 'text-green-400' : 'text-amber-400')}>
-                                      <Camera className={cn('w-4 h-4', failsMissingPhoto.length === 0 ? 'text-green-400' : 'text-amber-400')} />
-                                      Photos for failed items ({failedItems.length - failsMissingPhoto.length}/{failedItems.length})
-                        </div>
-                                  )}
-                        </div>
+              </div>
+              {item.status === 'fail' && (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    placeholder="Notes (optional)..."
+                    value={item.notes}
+                    onChange={e => setNotes(name, e.target.value)}
+                    className="w-full bg-gray-800 text-sm text-white rounded-lg p-2 resize-none border border-gray-700 focus:outline-none focus:border-brand-500"
+                    rows={2}
+                  />
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      id={'photo-' + name}
+                      className="hidden"
+                      onChange={e => handlePhoto(name, e)}
+                    />
+                    <label
+                      htmlFor={'photo-' + name}
+                      className={'flex items-center gap-2 text-xs px-3 py-2 rounded-lg cursor-pointer transition ' + (item.photo_url ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-300 hover:bg-gray-600')}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {item.photo_url ? 'Photo captured' : 'Take photo (required)'}
+                    </label>
+                  </div>
                 </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="p-4 bg-gray-900 border-t border-gray-800 space-y-2">
+        {failsMissingPhoto > 0 && (
+          <div className="flex items-center gap-2 text-xs text-yellow-400">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            {failsMissingPhoto} failed item{failsMissingPhoto !== 1 ? 's' : ''} need{failsMissingPhoto === 1 ? 's' : ''} a photo
           </div>
-        );
+        )}
+        {!allReviewed && (
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            {ITEMS.length - reviewed} item{ITEMS.length - reviewed !== 1 ? 's' : ''} remaining
+          </div>
+        )}
+        <button
+          onClick={handleSubmit}
+          disabled={!canSubmit || submitting}
+          className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition"
+        >
+          {submitting ? 'Submitting...' : !allReviewed ? ('Review ' + (ITEMS.length - reviewed) + ' remaining') : failsMissingPhoto > 0 ? 'Add photos for failed items' : 'Submit Inspection'}
+        </button>
+      </div>
+    </div>
+  );
 }
