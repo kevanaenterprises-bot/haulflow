@@ -298,7 +298,7 @@ function InspectionRow({
                                             {passedItems.map((item, idx) => (
                                       <div key={idx} className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-100 text-sm">
                                                         <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                                                        <span className="text-gray-700 truncate">{item.name}</span>
+                                                        <span className="text-gray-700 truncate">{item.name}
                                       </div>
                                     ))}
                                           </div>
@@ -347,4 +347,4 @@ function ItemCard({ item }: { item: InspectionItem }) {
                 )}
           </div>
         );
-}</div>
+}
