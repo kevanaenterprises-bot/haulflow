@@ -159,7 +159,7 @@ export default function DemoRequestPage() {
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />{f}</li>
                 ))}
               </ul>
-              <a href="#demo-form" className="block text-center bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-full py-3 transition-colors">Claim a Founding Spot</a>
+              <a href="/onboard" className="block text-center bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-full py-3 transition-colors">Claim a Founding Spot</a>
             </div>
 
             {/* Owner-Op */}
@@ -172,7 +172,7 @@ export default function DemoRequestPage() {
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />{f}</li>
                 ))}
               </ul>
-              <a href="#demo-form" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
+              <a href="/subscribe" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
             </div>
 
             {/* Fleet / Standard */}
@@ -185,7 +185,7 @@ export default function DemoRequestPage() {
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />{f}</li>
                 ))}
               </ul>
-              <a href="#demo-form" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
+              <a href="/subscribe" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
             </div>
           </div>
         </div>
