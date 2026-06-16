@@ -7,6 +7,7 @@ import pg from 'pg';
 import crypto from 'crypto';
 import { registerDvirRoutes } from './dvir-routes.js';
 import { registerDemoRoutes } from './demo-routes.js';
+import { registerDriverAuthRoutes } from './driver-auth-routes.js';
 
 const { Pool } = pg;
 
@@ -600,6 +601,7 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
 // ---------------------------------------------------------------------------
 // DVIR routes
 // ---------------------------------------------------------------------------
+registerDriverAuthRoutes(app, pool);
 registerDvirRoutes(app, pool, authMiddleware, driverAuthMiddleware);
 registerDemoRoutes(app, pool);
 
