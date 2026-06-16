@@ -122,37 +122,6 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/driver-login', async (req, res) => {
-  try {
-    const { phone, pin } = req.body;
-    if (!phone || !pin) {
-      return res.status(400).json({ error: 'Phone and PIN are required' });
-    }
-    const result = await pool.query(
-      `SELECT d.*, c.name AS company_name
-       FROM drivers d
-       JOIN companies c ON c.id = d.company_id
-       WHERE d.phone = $1 AND d.status != 'terminated'`,
-      [phone.replace(/\D/g, '')]
-    );
-    const driver = result.rows[0];
-    if (!driver) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const payload = {
-      driver_id: driver.id,
-      company_id: driver.company_id,
-      name: driver.name,
-      phone: driver.phone,
-    };
-    const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64')}.sig`;
-    res.json({ token, driver: { ...payload, company_name: driver.company_name } });
-  } catch (err) {
-    console.error('[AUTH] Driver login error:', err.message);
-    res.status(500).json({ error: 'Driver login failed' });
-  }
-});
-
 // ---------------------------------------------------------------------------
 // Company / Loads / Drivers / Customers / Shippers / Invoices CRUD
 // ---------------------------------------------------------------------------
