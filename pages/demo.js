@@ -31,7 +31,7 @@ export default function Demo() {
         body: JSON.stringify(form),
       });
       // Always redirect — even if email has a hiccup, let the prospect in
-      window.location.href = "/demo/app";
+      window.location.href = "/subscribe";
     } catch {
       setError("Something went wrong. Please try again.");
       setSending(false);
