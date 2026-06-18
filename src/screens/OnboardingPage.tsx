@@ -144,7 +144,7 @@ export default function OnboardingPage() {
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-            <a href="/" className="text-brand-500 font-medium hover:underline">Sign in</a>
+                    <a href="/login" className="text-brand-500 font-medium hover:underline">Sign in</a>
           </p>
         </form>
       </div>
