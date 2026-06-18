@@ -245,9 +245,9 @@ app.patch('/api/drivers/:id', authMiddleware, async (req, res) => {
       }
     }
     if (b.portal_password) {
-      const crypto = await import('crypto');
-      fields.push(`portal_password_hash = ${idx++}`);
-      values.push(crypto.createHash('sha256').update(b.portal_password).digest('hex'));
+      const cryptoMod = await import('crypto');
+      fields.push(`password_hash = ${idx++}`);
+      values.push(cryptoMod.createHash('sha256').update(b.portal_password).digest('hex'));
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     values.push(req.params.id, req.user.company_id);
