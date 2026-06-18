@@ -236,23 +236,23 @@ app.patch('/api/drivers/:id', authMiddleware, async (req, res) => {
     const b = req.body;
     const fields = [];
     const values = [];
-    let idx = 1;
     const allowed = ['name','phone','email','license_number','license_expiry','medical_card_expiry','hire_date','termination_date','status','cdl_file_url','medical_card_file_url'];
     for (const key of allowed) {
       if (key in b) {
-        fields.push(`${key} = ${idx++}`);
+        fields.push(key + ' = $' + (values.length + 1));
         values.push(b[key] || null);
       }
     }
     if (b.portal_password) {
-      const cryptoMod = await import('crypto');
-      fields.push(`password_hash = ${idx++}`);
-      values.push(cryptoMod.createHash('sha256').update(b.portal_password).digest('hex'));
+      fields.push('password_hash = $' + (values.length + 1));
+      values.push(crypto.createHash('sha256').update(b.portal_password).digest('hex'));
     }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    const idIdx = values.length + 1;
+    const companyIdx = values.length + 2;
     values.push(req.params.id, req.user.company_id);
     const result = await pool.query(
-      `UPDATE drivers SET ${fields.join(', ')} WHERE id = ${idx++} AND company_id = ${idx} RETURNING *`,
+      'UPDATE drivers SET ' + fields.join(', ') + ' WHERE id = $' + idIdx + ' AND company_id = $' + companyIdx + ' RETURNING *',
       values
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Driver not found' });
