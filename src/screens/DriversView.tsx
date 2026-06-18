@@ -11,7 +11,7 @@ export default function DriversView() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Driver | null>(null);
-  const [showForm, setShowForm] = useSate(false);
+  const [showForm, setShowForm] = useState(false);
   const [dqDriver, setDqDriver] = useState<Driver | null>(null);
 
   const fetch = async () => {
