@@ -23,7 +23,8 @@ export function registerDriverAuthRoutes(app, pool) {
                              FROM drivers d
                              JOIN companies c ON c.id = d.company_id
                              WHERE (d.phone = $1 OR d.phone = $2)
-                               AND d.status != 'terminated'`,
+                               AND d.status != 'terminated'
+                               ORDER BY d.created_at DESC LIMIT 1`,
                             [cleanPhone, phone.trim()]
                           );
 
