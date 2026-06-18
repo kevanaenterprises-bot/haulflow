@@ -144,7 +144,7 @@ export default function OnboardingPage() {
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-                    <a href="/login" className="text-brand-500 font-medium hover:underline">Sign in</a>
+                            <button type="button" onClick={() => { ['hf_token','hf_demo_expires_at','hf_user','hf_company'].forEach(k => localStorage.removeItem(k)); window.location.href = '/'; }} className="text-brand-500 font-medium hover:underline">Sign in</button>
           </p>
         </form>
       </div>
