@@ -231,6 +231,46 @@ app.post('/api/drivers', authMiddleware, async (req, res) => {
   }
 });
 
+app.patch('/api/drivers/:id', authMiddleware, async (req, res) => {
+  try {
+    const b = req.body;
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    const allowed = ['name','phone','email','license_number','license_expiry','medical_card_expiry','hire_date','termination_date','status','cdl_file_url','medical_card_file_url'];
+    for (const key of allowed) {
+      if (key in b) {
+        fields.push(`${key} = ${idx++}`);
+        values.push(b[key] || null);
+      }
+    }
+    if (b.portal_password) {
+      const crypto = await import('crypto');
+      fields.push(`portal_password_hash = ${idx++}`);
+      values.push(crypto.createHash('sha256').update(b.portal_password).digest('hex'));
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    values.push(req.params.id, req.user.company_id);
+    const result = await pool.query(
+      `UPDATE drivers SET ${fields.join(', ')} WHERE id = ${idx++} AND company_id = ${idx} RETURNING *`,
+      values
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Driver not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update driver', details: err.message });
+  }
+});
+
+app.delete('/api/drivers/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM drivers WHERE id = $1 AND company_id = $2', [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete driver', details: err.message });
+  }
+});
+
 // -- Customers --
 app.get('/api/customers', authMiddleware, async (req, res) => {
   try {
