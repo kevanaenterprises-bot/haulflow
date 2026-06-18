@@ -58,7 +58,11 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchLoad(); }, [fetchLoad]);
+  useEffect(() => {
+    fetchLoad();
+    const interval = setInterval(fetchLoad, 30000); // refresh every 30 s
+    return () => clearInterval(interval);
+  }, [fetchLoad]);
 
   const toggleVoice = () => {
     const next = voiceGender === 'female' ? 'male' : 'female';
@@ -313,7 +317,14 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
         <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
           <Truck className="w-16 h-16 text-gray-700 mb-4" />
           <h2 className="text-xl font-bold text-gray-300 mb-2">No Active Load</h2>
-          <p className="text-gray-500 text-sm">Check back when dispatch assigns you a load.</p>
+          <p className="text-gray-500 text-sm mb-6">Check back when dispatch assigns you a load.</p>
+          <button
+            onClick={fetchLoad}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Refresh
+          </button>
         </div>
       )}
 
