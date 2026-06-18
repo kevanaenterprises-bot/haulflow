@@ -4,11 +4,14 @@ import { api } from '../lib/api';
 import type { Driver } from '../types';
 import { cn } from '../lib/utils';
 
+// Strip time component from ISO date strings for display and form inputs
+const toDateStr = (val?: string) => val ? val.split('T')[0] : '';
+
 export default function DriversView() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Driver | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useSate(false);
   const [dqDriver, setDqDriver] = useState<Driver | null>(null);
 
   const fetch = async () => {
@@ -72,16 +75,16 @@ export default function DriversView() {
             <div className="mt-2 space-y-1">
               {d.license_expiry && (
                 <div className={cn('text-xs', isExpiringSoon(d.license_expiry) ? 'text-red-600 font-semibold' : 'text-gray-400')}>
-                  CDL expires: {d.license_expiry}{isExpiringSoon(d.license_expiry) ? ' ⚠️' : ''}
+                  CDL expires: {toDateStr(d.license_expiry)}{isExpiringSoon(d.license_expiry) ? ' ⚠️' : ''}
                 </div>
               )}
               {d.medical_card_expiry && (
                 <div className={cn('text-xs', isExpiringSoon(d.medical_card_expiry) ? 'text-red-600 font-semibold' : 'text-gray-400')}>
-                  Medical expires: {d.medical_card_expiry}{isExpiringSoon(d.medical_card_expiry) ? ' ⚠️' : ''}
+                  Medical expires: {toDateStr(d.medical_card_expiry)}{isExpiringSoon(d.medical_card_expiry) ? ' ⚠️' : ''}
                 </div>
               )}
-              {d.hire_date && <div className="text-xs text-gray-400">Hired: {d.hire_date}</div>}
-              {d.termination_date && <div className="text-xs text-red-400">Terminated: {d.termination_date}</div>}
+              {d.hire_date && <div className="text-xs text-gray-400">Hired: {toDateStr(d.hire_date)}</div>}
+              {d.termination_date && <div className="text-xs text-red-400">Terminated: {toDateStr(d.termination_date)}</div>}
             </div>
             <div className="flex gap-2 mt-3 flex-wrap">
               {d.cdl_file_url && (
@@ -330,10 +333,10 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
     phone: driver?.phone || '',
     email: driver?.email || '',
     license_number: driver?.license_number || '',
-    license_expiry: driver?.license_expiry || '',
-    medical_card_expiry: driver?.medical_card_expiry || '',
-    hire_date: driver?.hire_date || '',
-    termination_date: driver?.termination_date || '',
+    license_expiry: toDateStr(driver?.license_expiry) || '',
+    medical_card_expiry: toDateStr(driver?.medical_card_expiry) || '',
+    hire_date: toDateStr(driver?.hire_date) || '',
+    termination_date: toDateStr(driver?.termination_date) || '',
     cdl_file_url: driver?.cdl_file_url || '',
     medical_card_file_url: driver?.medical_card_file_url || '',
     portal_password: '',
