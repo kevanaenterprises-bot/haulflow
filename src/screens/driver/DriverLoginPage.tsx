@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function DriverLoginPage({ onLogin }: Props) {
-    const [phone, setPhone] = useState('');
+    const [phone, setPhone] = useState('')
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -54,7 +54,7 @@ export default function DriverLoginPage({ onLogin }: Props) {
                                                             inputMode="text"
                                                             value={phone}
                                                             onChange={e => setPhone(e.target.value)}
-                                                            placeholder="9038037500"
+                                                                            placeholder=""
                                                             autoComplete="username"
                                                             className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                                                           />
