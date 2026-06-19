@@ -380,3 +380,52 @@ CREATE INDEX IF NOT EXISTS idx_drivers_company ON drivers(company_id);
 CREATE INDEX IF NOT EXISTS idx_customers_company ON customers(company_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_company ON invoices(company_id);
 CREATE INDEX IF NOT EXISTS idx_shippers_company ON shippers(company_id);
+
+-- ── Schema migrations for missing columns ─────────────────────────────────────
+-- These ALTER TABLEs add columns referenced by the API server but missing from
+-- the original CREATE TABLE definitions above.
+
+DO $$ BEGIN
+
+-- invoices: add customer_id, due_date, notes (used by POST /api/invoices)
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='customer_id') THEN
+  ALTER TABLE invoices ADD COLUMN customer_id UUID REFERENCES customers(id) ON DELETE SET NULL;
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='due_date') THEN
+  ALTER TABLE invoices ADD COLUMN due_date DATE;
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='notes') THEN
+  ALTER TABLE invoices ADD COLUMN notes TEXT;
+END IF;
+
+-- loads: add full address columns (server uses origin_address, origin_zip, etc.)
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='origin_address') THEN
+  ALTER TABLE loads ADD COLUMN origin_address TEXT;
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='origin_zip') THEN
+  ALTER TABLE loads ADD COLUMN origin_zip VARCHAR(20);
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='destination_address') THEN
+  ALTER TABLE loads ADD COLUMN destination_address TEXT;
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='destination_city') THEN
+  ALTER TABLE loads ADD COLUMN destination_city VARCHAR(100);
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='destination_state') THEN
+  ALTER TABLE loads ADD COLUMN destination_state VARCHAR(50);
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loads' AND column_name='destination_zip') THEN
+  ALTER TABLE loads ADD COLUMN destination_zip VARCHAR(20);
+END IF;
+
+-- customers: add name column as alias for company_name (server also queries c.name in some JOINs)
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='customers' AND column_name='name') THEN
+  ALTER TABLE customers ADD COLUMN name VARCHAR(255) GENERATED ALWAYS AS (company_name) STORED;
+END IF;
+
+-- companies: add shop_alert_email if missing
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='companies' AND column_name='shop_alert_email') THEN
+  ALTER TABLE companies ADD COLUMN shop_alert_email VARCHAR(255);
+END IF;
+
+END $$;
