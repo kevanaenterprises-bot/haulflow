@@ -617,6 +617,6 @@ registerDemoRoutes(app, pool);
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------// Startup DB migration — adds columns that may be missing from older DBs
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`[HaulFlow] API server running on port ${PORT}`);
 });
