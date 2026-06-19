@@ -275,7 +275,7 @@ app.delete('/api/drivers/:id', authMiddleware, async (req, res) => {
 app.get('/api/customers', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT * FROM customers WHERE company_id = $1 ORDER BY name',
+      'SELECT * FROM customers WHERE company_id = $1 ORDER BY company_name',
       [req.user.company_id]
     );
     res.json(result.rows);
@@ -288,7 +288,7 @@ app.post('/api/customers', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
     const result = await pool.query(
-      `INSERT INTO customers (company_id, name, email, phone, billing_address, city, state, zip, payment_terms)
+      `INSERT INTO customers (company_id, company_name, email, phone, address, city, state, zip, payment_terms)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [req.user.company_id, b.name, b.email, b.phone, b.billing_address, b.city, b.state, b.zip, b.payment_terms || 30]
     );
@@ -315,9 +315,9 @@ app.post('/api/shippers', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
     const result = await pool.query(
-      `INSERT INTO shippers (company_id, name, address, city, state, zip, contact_name, phone, email)
+      `INSERT INTO shippers (company_id, name, address, city, state, zip, contact_name, contact_phone, contact_email)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.company_id, b.name, b.address, b.city, b.state, b.zip, b.contact_name, b.phone, b.email]
+      [req.user.company_id, b.name, b.address, b.city, b.state, b.zip, b.contact_name, b.phone || b.contact_phone, b.email || b.contact_email]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -329,7 +329,7 @@ app.post('/api/shippers', authMiddleware, async (req, res) => {
 app.get('/api/invoices', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT i.*, c.name AS customer_name, l.load_number
+      `SELECT i.*, c.company_name AS customer_name, l.load_number
        FROM invoices i
        LEFT JOIN customers c ON c.id = i.customer_id
        LEFT JOIN loads l ON l.id = i.load_id
@@ -394,9 +394,9 @@ app.post('/api/trucks', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
     const result = await pool.query(
-      `INSERT INTO trucks (company_id, unit_number, asset_type, make, model, year, vin, license_plate, state_registered, status)
+      `INSERT INTO trucks (company_id, unit_number, type, make, model, year, vin, license_plate, state, status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.user.company_id, b.unit_number, b.asset_type || 'tractor', b.make, b.model, b.year, b.vin, b.license_plate, b.state_registered, b.status || 'active']
+      [req.user.company_id, b.unit_number, b.type || 'truck', b.make, b.model, b.year, b.vin, b.license_plate, b.state, b.status || 'active']
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
