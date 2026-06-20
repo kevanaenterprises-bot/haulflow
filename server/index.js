@@ -504,6 +504,43 @@ app.put('/api/company', authMiddleware, async (req, res) => {
   }
 });
 
+// -- Settings (thin wrapper over companies columns) --
+app.get('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT auto_invoicing, dvir_photo_gated, maintenance_alert_email
+         FROM companies WHERE id = $1`, [req.user.company_id]);
+    if (!result.rows[0]) return res.status(404).json({ error: 'Company not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch settings', details: err.message });
+  }
+});
+
+app.patch('/api/settings', authMiddleware, async (req, res) => {
+  try {
+    const b = req.body;
+    const sets = [];
+    const vals = [];
+    const allowed = ['auto_invoicing', 'dvir_photo_gated', 'maintenance_alert_email'];
+    for (const col of allowed) {
+      if (b[col] !== undefined) {
+        sets.push(`${col} = $${sets.length + 1}`);
+        vals.push(b[col]);
+      }
+    }
+    if (!sets.length) return res.status(400).json({ error: 'No valid settings fields provided' });
+    vals.push(req.user.company_id);
+    const result = await pool.query(
+      `UPDATE companies SET ${sets.join(', ')} WHERE id = $${vals.length} RETURNING auto_invoicing, dvir_photo_gated, maintenance_alert_email`,
+      vals
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update settings', details: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Driver portal routes
 // ---------------------------------------------------------------------------
