@@ -37,10 +37,8 @@ export default function SubscribePage() {
       .then(data => {
         setTiers(data);
         // Auto-select the best available tier
-        if (onAndroid && data.find(t => t.id === 'founding-1yr' && (t.slotsRemaining ?? 0) > 0)) {
+        if (data.find(t => t.id === 'founding-1yr' && (t.slotsRemaining ?? 0) > 0)) {
           setSelectedPlan('founding-1yr');
-        } else if (data.find(t => t.id === 'founding-6mo' && (t.slotsRemaining ?? 0) > 0)) {
-          setSelectedPlan('founding-6mo');
         } else {
           setSelectedPlan(data.find(t => t.id === 'fleet-20')?.id || data[0]?.id || null);
         }
@@ -124,8 +122,7 @@ export default function SubscribePage() {
             {tiers.map(tier => {
               const isFounding = tier.slotsRemaining !== null;
               const soldOut = isFounding && tier.slotsRemaining === 0;
-              const androidOnly = tier.requiresAndroid && !onAndroid;
-              const isAvailable = !soldOut && !androidOnly;
+              const isAvailable = !soldOut;
 
               return (
                 <button
@@ -150,12 +147,6 @@ export default function SubscribePage() {
                   {soldOut && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-700 text-gray-300 text-xs font-bold px-3 py-1 rounded-full">
                       Sold Out
-                    </div>
-                  )}
-
-                  {androidOnly && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                      Android Only
                     </div>
                   )}
 

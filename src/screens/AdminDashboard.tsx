@@ -35,9 +35,6 @@ interface Slots {
   founding_1yr_used: number;
   founding_1yr_total: number;
   founding_1yr_remaining: number;
-  founding_6mo_used: number;
-  founding_6mo_total: number;
-  founding_6mo_remaining: number;
 }
 
 interface Stats {
@@ -89,7 +86,6 @@ function formatStatus(status: string) {
   const map: Record<string, { label: string; color: string }> = {
     trial: { label: 'Trial', color: 'bg-yellow-100 text-yellow-800' },
     founding_1yr: { label: 'Founding (1yr free)', color: 'bg-green-100 text-green-800' },
-    founding_6mo: { label: 'Founding (6mo free)', color: 'bg-green-100 text-green-700' },
     active: { label: 'Active', color: 'bg-blue-100 text-blue-800' },
     cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
   };
@@ -340,17 +336,11 @@ export default function AdminDashboard() {
 
             {/* Founding Slots */}
             {slots && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="mb-8">
                 <SlotCard
-                  title="🏷️ Founding Tier 1 — Free 1 Year (Android)"
+                  title="🏷️ Founding Members — Free 1 Year (25 slots)"
                   used={slots.founding_1yr_used}
                   total={slots.founding_1yr_total}
-                  color="green"
-                />
-                <SlotCard
-                  title="🏷️ Founding Tier 2 — Free 6 Months"
-                  used={slots.founding_6mo_used}
-                  total={slots.founding_6mo_total}
                   color="green"
                 />
               </div>

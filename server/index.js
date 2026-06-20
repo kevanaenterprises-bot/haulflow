@@ -999,18 +999,9 @@ const PLANS = {
     label: 'Founding Owner-Op',
     amount: 15000, // $150/mo after trial
     trialDays: 365, // 1 year free
-    description: '1 year free, then $150/mo. 1 truck. Android only.',
-    slotLimit: 12,
+    description: '1 year free, then $150/mo. Any platform.',
+    slotLimit: 25,
     slotStatus: 'founding_1yr',
-    requiresAndroid: true,
-  },
-  'founding-6mo': {
-    label: 'Early Adopter Owner-Op',
-    amount: 15000, // $150/mo after trial
-    trialDays: 182, // ~6 months free
-    description: '6 months free, then $150/mo. 1 truck.',
-    slotLimit: 15,
-    slotStatus: 'founding_6mo',
     requiresAndroid: false,
   },
   'fleet-20': {
