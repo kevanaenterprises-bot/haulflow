@@ -1066,6 +1066,58 @@ app.get('/api/pricing', async (_req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// TTS Proxy — ElevenLabs (keeps API key server-side)
+// ---------------------------------------------------------------------------
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
+const ELEVENLABS_VOICES = {
+  female: 'pNInz6obpgDQGcFmaJgB', // Rachel — warm, natural female
+  male:   'ADx4rFcOZIBMwqqXaLMs', // Adam — clear, natural male
+};
+
+app.post('/api/tts', async (req, res) => {
+  try {
+    const { text, gender = 'female' } = req.body || {};
+    if (!text || !text.trim()) return res.status(400).json({ error: 'Text is required' });
+    if (!ELEVENLABS_API_KEY) {
+      // Fallback: return empty so frontend falls back to browser speech
+      return res.status(503).json({ error: 'TTS not configured' });
+    }
+
+    const voiceId = ELEVENLABS_VOICES[gender] || ELEVENLABS_VOICES.female;
+    const elevenRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text: text.trim().slice(0, 500), // cap at 500 chars
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      }),
+    });
+
+    if (!elevenRes.ok) {
+      const errBody = await elevenRes.text();
+      console.error('[TTS] ElevenLabs error:', elevenRes.status, errBody);
+      return res.status(502).json({ error: 'TTS generation failed' });
+    }
+
+    const audioBuffer = await elevenRes.arrayBuffer();
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'public, max-age=86400'); // cache for 24h
+    res.send(Buffer.from(audioBuffer));
+  } catch (err) {
+    console.error('[TTS] Error:', err.message);
+    res.status(500).json({ error: 'TTS failed' });
+  }
+});
+
 // POST /api/create-checkout-session — creates a Stripe Checkout session
 app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
   try {

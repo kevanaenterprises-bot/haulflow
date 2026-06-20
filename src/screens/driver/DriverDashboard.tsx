@@ -70,16 +70,47 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
     localStorage.setItem('hf_voice', next);
   };
 
-  const speak = (text: string) => {
+  const speak = useCallback(async (text: string) => {
+    try {
+      // Try ElevenLabs first (natural voice)
+      const API = import.meta.env.VITE_API_URL || window.location.origin;
+      const res = await fetch(`${API}/api/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, gender: voiceGender }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        audio.onerror = () => URL.revokeObjectURL(url);
+        audio.play().catch(() => {
+          URL.revokeObjectURL(url);
+          fallbackSpeak(text); // fallback if autoplay blocked
+        });
+        return;
+      }
+    } catch { /* fall through to fallback */ }
+    fallbackSpeak(text);
+  }, [voiceGender]);
+
+  // Browser speech fallback (robotic but works offline)
+  const fallbackSpeak = (text: string) => {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v =>
-      voiceGender === 'female'
-        ? v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Victoria')
-        : v.name.toLowerCase().includes('male') || v.name.includes('Alex') || v.name.includes('Daniel')
-    );
+    // Better voice matching — try lang prefix + gender keywords
+    const preferred = voices.find(v => {
+      const n = v.name.toLowerCase();
+      const lang = n.startsWith('en-') || n.startsWith('english');
+      if (voiceGender === 'female') {
+        return lang && (n.includes('female') || n.includes('samantha') || n.includes('victoria') || n.includes('karen') || n.includes('moira') || n.includes('fiona'));
+      } else {
+        return lang && (n.includes('male') || n.includes('alex') || n.includes('daniel') || n.includes('fred') || n.includes('tom') || n.includes('aaron'));
+      }
+    }) || voices.find(v => v.lang.startsWith('en'));
     if (preferred) utt.voice = preferred;
     utt.rate = 0.95;
     window.speechSynthesis.speak(utt);
