@@ -2,11 +2,9 @@ import crypto from 'crypto';
 
 /**
  * registerDriverAuthRoutes — registers driver login routes
-  * Must be imported and called in index.js BEFORE the old driver-login route.
-   * Supports login by phone number + password (SHA-256 hashed).
-    * Falls back gracefully if password_hash column does not exist (no-password legacy mode).
-     */
-export function registerDriverAuthRoutes(app, pool) {
+ * Uses signed JWT tokens (HMAC-SHA256) instead of base64.
+ */
+export function registerDriverAuthRoutes(app, pool, jwtSecret, jwtExpiresIn) {
     // POST /api/auth/driver-login  (used by DriverLoginPage.tsx)
     // POST /api/driver/login       (alias — old path kept for compatibility)
     const handler = async (req, res) => {
@@ -51,7 +49,9 @@ export function registerDriverAuthRoutes(app, pool) {
                             name: driver.name,
                             phone: driver.phone,
                   };
-                  const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64')}.sig`;
+                  // Use dynamic import to avoid circular dependency
+                  const { default: jwt } = await import('jsonwebtoken');
+                  const token = jwt.sign(payload, jwtSecret, { expiresIn: jwtExpiresIn });
                   res.json({
                             token,
                             driver: {

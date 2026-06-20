@@ -5,6 +5,8 @@ import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { registerDvirRoutes } from './dvir-routes.js';
 import { registerDemoRoutes } from './demo-routes.js';
 import { registerDriverAuthRoutes } from './driver-auth-routes.js';
@@ -13,6 +15,18 @@ const { Pool } = pg;
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// ---------------------------------------------------------------------------
+// JWT config
+// ---------------------------------------------------------------------------
+// JWT secret — set JWT_SECRET env var in production. Falls back to a deterministic
+// hash so tokens survive server restarts (not random per-start).
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  // Stable fallback: derive from DATABASE_URL so it's unique per deployment
+  const seed = process.env.DATABASE_URL || 'haulflow-default-jwt-secret-change-me';
+  return crypto.createHash('sha256').update(seed).digest('hex');
+})();
+const JWT_EXPIRES_IN = '24h';
 
 // ---------------------------------------------------------------------------
 // Database
@@ -88,8 +102,43 @@ async function runMigrations() {
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
-app.use(cors({ origin: true, credentials: true }));
+const ALLOWED_ORIGINS = [
+  'https://haulflow.turtlelogisticsllc.com',
+  'https://haulflo-turtlelogisticsllc.vercel.app', // Vercel deploy alias
+  'http://localhost:5173',  // local dev
+  'http://localhost:3001',  // local API
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
+
+// ---------------------------------------------------------------------------
+// Rate limiting
+// ---------------------------------------------------------------------------
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 attempts per window per IP
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const onboardingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 signups per hour per IP
+  message: { error: 'Too many signup attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ---------------------------------------------------------------------------
 // Auth helpers
@@ -101,13 +150,11 @@ function authMiddleware(req, res, next) {
   }
   const token = header.slice(7);
   try {
-    const decoded = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64').toString()
-    );
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
@@ -118,13 +165,11 @@ function driverAuthMiddleware(req, res, next) {
   }
   const token = header.slice(7);
   try {
-    const decoded = JSON.parse(
-      Buffer.from(token.split('.')[1], 'base64').toString()
-    );
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.driver = decoded;
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid driver token' });
+    return res.status(401).json({ error: 'Invalid or expired driver token' });
   }
 }
 
@@ -138,7 +183,7 @@ app.get('/api/health', (_req, res) => {
 // ---------------------------------------------------------------------------
 // Auth routes
 // ---------------------------------------------------------------------------
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -165,7 +210,7 @@ app.post('/api/auth/login', async (req, res) => {
       email: user.email,
       role: user.role,
     };
-    const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64')}.sig`;
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
     res.json({
       token,
       user: {
@@ -577,7 +622,7 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
 // Self-Service Onboarding — POST /api/onboard
 // Creates a new company + admin user, returns auto-login token
 // ---------------------------------------------------------------------------
-app.post('/api/onboard', async (req, res) => {
+app.post('/api/onboard', onboardingLimiter, async (req, res) => {
     try {
           const {
                   company_name, company_email, company_phone,
@@ -633,7 +678,7 @@ app.post('/api/onboard', async (req, res) => {
                   email: user.email,
                   role: user.role,
           };
-          const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64')}.sig`;
+          const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
           console.log(`[ONBOARD] New company created: ${company_name} (${company.id}) — admin: ${admin_email}`);
 
@@ -708,7 +753,7 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
 // ---------------------------------------------------------------------------
 // DVIR routes
 // ---------------------------------------------------------------------------
-registerDriverAuthRoutes(app, pool);
+registerDriverAuthRoutes(app, pool, JWT_SECRET, JWT_EXPIRES_IN);
 registerDvirRoutes(app, pool, authMiddleware, driverAuthMiddleware);
 registerDemoRoutes(app, pool);
 
