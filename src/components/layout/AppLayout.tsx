@@ -80,7 +80,16 @@ export default function AppLayout({ activeTab, onTabChange, children }: AppLayou
                       </nav>
               
                       <div className="p-3 border-t border-brand-700">
-                                <div className="text-xs text-brand-300 px-2 mb-2 truncate">{user?.email}</div>
+                                <a
+                                  href="/driver"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-cyan-300 hover:bg-brand-800 transition no-underline"
+                                >
+                                  <Truck className="w-4 h-4" />
+                                  Driver Portal
+                                </a>
+                                <div className="text-xs text-brand-300 px-2 mb-2 truncate mt-1">{user?.email}</div>
                                 <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-brand-200 hover:bg-brand-800 transition">
                                             <LogOut className="w-4 h-4" />
                                             Sign out
