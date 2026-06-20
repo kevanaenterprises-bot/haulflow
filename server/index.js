@@ -1072,7 +1072,7 @@ app.get('/api/pricing', async (_req, res) => {
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICES = {
   female: 'pNInz6obpgDQGcFmaJgB', // Rachel — warm, natural female
-  male:   'ADx4rFcOZIBMwqqXaLMs', // Adam — clear, natural male
+  male:   'TxGEqnHWrfWFTfGW9XjX', // Josh — clear, natural male
 };
 
 app.post('/api/tts', async (req, res) => {
