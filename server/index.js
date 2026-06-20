@@ -285,24 +285,128 @@ app.get('/api/admin/stats', adminAuthMiddleware, async (_req, res) => {
   }
 });
 
-// POST /api/admin/reset-password — reset a user's password (for support/impersonation)
-app.post('/api/admin/reset-password', adminAuthMiddleware, async (req, res) => {
+// ---------------------------------------------------------------------------
+// Platform error logging & activity feed
+// ---------------------------------------------------------------------------
+
+// Error logging middleware — captures API errors across the platform
+app.use((err, req, res, next) => {
+  console.error(`[ERROR] ${req.method} ${req.path}: ${err.message}`);
+  // Log to DB async (fire-and-forget)
+  pool.query(
+    `INSERT INTO platform_errors (method, path, error_message, status_code, ip)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [req.method, req.path.substring(0, 200), (err.message || '').substring(0, 500),
+     res.statusCode || 500, (req.ip || '').substring(0, 45)]
+  ).catch(() => {});
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+});
+
+// Helper to log activity events
+async function logActivity(type, detail, companyId) {
   try {
-    const { email, new_password } = req.body || {};
-    if (!email || !new_password) {
-      return res.status(400).json({ error: 'Email and new_password required' });
-    }
-    const hash = crypto.createHash('sha256').update(new_password).digest('hex');
-    const result = await pool.query(
-      `UPDATE users SET password_hash = $1 WHERE email = $2 RETURNING id, name, email`,
-      [hash, email.toLowerCase().trim()]
+    await pool.query(
+      `INSERT INTO platform_activity (type, detail, company_id) VALUES ($1, $2, $3)`,
+      [type, detail.substring(0, 500), companyId || null]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+  } catch {}
+}
+
+// GET /api/admin/errors — recent platform errors
+app.get('/api/admin/errors', adminAuthMiddleware, async (req, res) => {
+  try {
+    const since = req.query.since; // optional ISO timestamp
+    let q = `SELECT * FROM platform_errors`;
+    let params = [];
+    if (since) {
+      q += ` WHERE created_at > $1`;
+      params.push(since);
     }
-    res.json({ success: true, user: { id: result.rows[0].id, name: result.rows[0].name, email: result.rows[0].email } });
+    q += ` ORDER BY created_at DESC LIMIT 100`;
+    const result = await pool.query(q, params);
+    res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to reset password', details: err.message });
+    res.status(500).json({ error: 'Failed to fetch errors', details: err.message });
+  }
+});
+
+// DELETE /api/admin/errors — clear error log
+app.delete('/api/admin/errors', adminAuthMiddleware, async (_req, res) => {
+  try {
+    await pool.query('DELETE FROM platform_errors');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to clear errors' });
+  }
+});
+
+// GET /api/admin/activity — recent platform activity (signups, payments, errors)
+app.get('/api/admin/activity', adminAuthMiddleware, async (req, res) => {
+  try {
+    const since = req.query.since; // optional ISO timestamp
+    let q = `SELECT * FROM platform_activity`;
+    let params = [];
+    if (since) {
+      q += ` WHERE created_at > $1`;
+      params.push(since);
+    }
+    q += ` ORDER BY created_at DESC LIMIT 100`;
+    const result = await pool.query(q, params);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch activity', details: err.message });
+  }
+});
+
+// GET /api/admin/health — deep platform health check
+app.get('/api/admin/health', adminAuthMiddleware, async (_req, res) => {
+  try {
+    const checks = {};
+
+    // Database health
+    const dbStart = Date.now();
+    await pool.query('SELECT 1');
+    checks.database = { status: 'healthy', latency_ms: Date.now() - dbStart };
+
+    // Stripe connectivity
+    const stripeStart = Date.now();
+    try {
+      if (STRIPE_SECRET_KEY) {
+        const r = await fetch('https://api.stripe.com/v1/balance', {
+          headers: { 'Authorization': `Bearer ${STRIPE_SECRET_KEY}` },
+        });
+        checks.stripe = {
+          status: r.ok ? 'connected' : 'error',
+          latency_ms: Date.now() - stripeStart,
+          mode: STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'test',
+        };
+      } else {
+        checks.stripe = { status: 'not configured' };
+      }
+    } catch {
+      checks.stripe = { status: 'unreachable' };
+    }
+
+    // Railway env status
+    checks.environment = {
+      NODE_ENV: process.env.NODE_ENV || 'production',
+      PORT: process.env.PORT || 3001,
+      has_stripe_key: !!STRIPE_SECRET_KEY,
+      has_webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      has_mail_config: !!(process.env.MAIL_USER && process.env.MAIL_PASS),
+      has_admin_password: !!process.env.ADMIN_PASSWORD,
+    };
+
+    // Uptime (process)
+    checks.process = {
+      uptime_seconds: Math.floor(process.uptime()),
+      memory_mb: Math.round((process.memoryUsage?.().heapUsed || 0) / 1024 / 1024),
+    };
+
+    res.json(checks);
+  } catch (err) {
+    res.status(500).json({ error: 'Health check failed', details: err.message });
   }
 });
 
@@ -874,6 +978,7 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
           }
 
           console.log(`[SETUP] Company ${company_id} setup complete`);
+          logActivity('setup_complete', `Company ${company_id} completed setup wizard`, company_id);
           res.json({ success: true });
     } catch (err) {
           console.error('[SETUP] Error:', err.message);
@@ -1087,6 +1192,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         }
 
         console.log(`[STRIPE] Checkout completed for company ${companyId} (plan: ${plan})`);
+        logActivity('stripe_checkout', `Checkout completed for company ${companyId} (${plan})`, companyId);
         break;
       }
 

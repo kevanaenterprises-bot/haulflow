@@ -446,4 +446,26 @@ IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='custom
   ALTER TABLE customers ADD COLUMN zip VARCHAR(20);
 END IF;
 
+-- platform_errors: capture all API errors
+CREATE TABLE IF NOT EXISTS platform_errors (
+  id SERIAL PRIMARY KEY,
+  method VARCHAR(10),
+  path VARCHAR(200),
+  error_message VARCHAR(500),
+  status_code INTEGER DEFAULT 500,
+  ip VARCHAR(45),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_platform_errors_created ON platform_errors(created_at DESC);
+
+-- platform_activity: signups, payments, plan changes
+CREATE TABLE IF NOT EXISTS platform_activity (
+  id SERIAL PRIMARY KEY,
+  type VARCHAR(50) NOT NULL,
+  detail VARCHAR(500),
+  company_id UUID,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_platform_activity_created ON platform_activity(created_at DESC);
+
 END $$;
