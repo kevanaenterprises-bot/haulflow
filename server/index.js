@@ -1254,7 +1254,14 @@ registerDemoRoutes(app, pool);
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
-runMigrations().then(() => {
+runMigrations().then(async () => {
+  // One-time: reset kevin@go4fc.com demo password
+  const demoHash = 'eb42ddeda21c7dc91dd53d95081cbf36dbe6227dcd2ac186e063b5b899629a5b';
+  try {
+    await pool.query("UPDATE users SET password_hash = $1 WHERE email = 'kevin@go4fc.com' AND password_hash != $1", [demoHash]);
+    console.log('[SETUP] Demo account password reset (if needed)');
+  } catch {}
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[HaulFlow] API server running on port ${PORT}`);
   });
