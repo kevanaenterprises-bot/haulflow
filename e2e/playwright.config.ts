@@ -17,7 +17,8 @@ import { defineConfig, devices } from '@playwright/test';
  *   API_URL    - override the API URL  (default: same as BASE_URL)
    */
 
-const BASE_URL = process.env.BASE_URL || 'https://haulflow.vercel.app';
+const BASE_URL = process.env.BASE_URL || 'https://haulflow.turtlelogisticsllc.com';
+const API_URL = process.env.API_URL || 'https://haulflow-production-575a.up.railway.app';
 
 export default defineConfig({
   testDir: './tests',
@@ -28,7 +29,7 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['list']],
 
   use: {
-    baseURL: BASE_URL,
+    baseURL: BASE_URL,   // Used by page.goto() for relative URLs
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

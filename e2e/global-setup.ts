@@ -13,12 +13,14 @@
 import { writeFileSync } from 'fs';
 import path from 'path';
 
-const BASE_URL = process.env.BASE_URL || 'https://haulflow.vercel.app';
+const API_URL = process.env.API_URL || process.env.BASE_URL || 'https://haulflow-production-575a.up.railway.app';
+const UI_URL  = process.env.UI_URL  || process.env.BASE_URL || 'https://haulflow.turtlelogisticsllc.com';
 
 export const CONTEXT_FILE = path.join(__dirname, '.test-context.json');
 
 export interface TestContext {
-    baseUrl: string;
+    baseUrl: string;   // API URL — used for all /api/* calls
+    uiUrl: string;     // UI URL — used for page.goto() browser navigation
     adminEmail: string;
     adminPassword: string;
     companyName: string;
@@ -38,7 +40,8 @@ export default async function globalSetup() {
   const suffix = Date.now().toString().slice(-6);
 
   const ctx: Partial<TestContext> = {
-        baseUrl: BASE_URL,
+        baseUrl: API_URL,
+        uiUrl: UI_URL,
         companyName: `Thunder Ridge Logistics ${suffix}`,
         adminEmail: `admin${suffix}@thunderridge.test`,
         adminPassword: `HaulTest${suffix}!`,

@@ -428,4 +428,22 @@ IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='compan
   ALTER TABLE companies ADD COLUMN shop_alert_email VARCHAR(255);
 END IF;
 
+-- shippers: ensure contact_phone and contact_email exist (old DBs may lack them)
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='shippers' AND column_name='contact_phone') THEN
+  ALTER TABLE shippers ADD COLUMN contact_phone VARCHAR(50);
+END IF;
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='shippers' AND column_name='contact_email') THEN
+  ALTER TABLE shippers ADD COLUMN contact_email VARCHAR(255);
+END IF;
+
+-- trucks: ensure state column exists (old DBs may lack it)
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='trucks' AND column_name='state') THEN
+  ALTER TABLE trucks ADD COLUMN state VARCHAR(50);
+END IF;
+
+-- customers: ensure zip column exists (old DBs may lack it)
+IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='customers' AND column_name='zip') THEN
+  ALTER TABLE customers ADD COLUMN zip VARCHAR(20);
+END IF;
+
 END $$;

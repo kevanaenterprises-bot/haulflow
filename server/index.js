@@ -25,6 +25,68 @@ const pool = new Pool({
 });
 
 // ---------------------------------------------------------------------------
+// Startup: auto-migrate missing columns on the live DB
+// ---------------------------------------------------------------------------
+async function runMigrations() {
+  const migrations = [
+    // customers
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255)`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50)`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS address TEXT`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS city VARCHAR(100)`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS state VARCHAR(50)`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS zip VARCHAR(20)`,
+    `ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(255)`,
+    // shippers
+    `ALTER TABLE shippers ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(50)`,
+    `ALTER TABLE shippers ADD COLUMN IF NOT EXISTS contact_email VARCHAR(255)`,
+    `ALTER TABLE shippers ADD COLUMN IF NOT EXISTS contact_name VARCHAR(255)`,
+    // trucks
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'truck'`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS unit_number VARCHAR(50)`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS state VARCHAR(50)`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS license_plate VARCHAR(50)`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS year INTEGER`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS make VARCHAR(100)`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS model VARCHAR(100)`,
+    `ALTER TABLE trucks ADD COLUMN IF NOT EXISTS vin VARCHAR(50)`,
+    // loads
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS origin_city VARCHAR(100)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS origin_state VARCHAR(50)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS origin_address TEXT`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS origin_zip VARCHAR(20)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS dest_city VARCHAR(100)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS dest_state VARCHAR(50)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS destination_address TEXT`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS destination_city VARCHAR(100)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS destination_state VARCHAR(50)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS commodity VARCHAR(255)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS weight INTEGER`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS trailer_number VARCHAR(100)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS pickup_date DATE`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_date DATE`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS rate DECIMAL(10,2)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS miles INTEGER`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS customer_id UUID`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS shipper_id UUID`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS notes TEXT`,
+    // invoices
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id UUID`,
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS due_date DATE`,
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS notes TEXT`,
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS amount DECIMAL(10,2)`,
+    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS load_id UUID`,
+    // companies
+    `ALTER TABLE companies ADD COLUMN IF NOT EXISTS shop_alert_email VARCHAR(255)`,
+  ];
+  for (const sql of migrations) {
+    try { await pool.query(sql); } catch (e) { /* column may already exist, that's fine */ }
+  }
+  console.log(`[migrations] ${migrations.length} migration checks completed`);
+}
+
+// ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
 app.use(cors({ origin: true, credentials: true }));
@@ -288,9 +350,9 @@ app.post('/api/customers', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
     const result = await pool.query(
-      `INSERT INTO customers (company_id, company_name, email, phone, address, city, state, zip, payment_terms)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.company_id, b.name, b.email, b.phone, b.billing_address, b.city, b.state, b.zip, b.payment_terms || 30]
+      `INSERT INTO customers (company_id, company_name, contact_name, contact_phone, email, address, city, state)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.user.company_id, b.name || b.company_name, b.contact_name, b.phone || b.contact_phone, b.email, b.billing_address || b.address, b.city, b.state]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -615,8 +677,11 @@ registerDvirRoutes(app, pool, authMiddleware, driverAuthMiddleware);
 registerDemoRoutes(app, pool);
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[HaulFlow] API server running on port ${PORT}`);
+runMigrations().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[HaulFlow] API server running on port ${PORT}`);
+  });
 });
