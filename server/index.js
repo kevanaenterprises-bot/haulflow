@@ -285,6 +285,27 @@ app.get('/api/admin/stats', adminAuthMiddleware, async (_req, res) => {
   }
 });
 
+// POST /api/admin/reset-password — reset a user's password (for support/impersonation)
+app.post('/api/admin/reset-password', adminAuthMiddleware, async (req, res) => {
+  try {
+    const { email, new_password } = req.body || {};
+    if (!email || !new_password) {
+      return res.status(400).json({ error: 'Email and new_password required' });
+    }
+    const hash = crypto.createHash('sha256').update(new_password).digest('hex');
+    const result = await pool.query(
+      `UPDATE users SET password_hash = $1 WHERE email = $2 RETURNING id, name, email`,
+      [hash, email.toLowerCase().trim()]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true, user: { id: result.rows[0].id, name: result.rows[0].name, email: result.rows[0].email } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset password', details: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Health check (Railway uses this)
 // ---------------------------------------------------------------------------

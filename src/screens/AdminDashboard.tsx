@@ -148,6 +148,37 @@ export default function AdminDashboard() {
     setSlots(null);
   };
 
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetNewPw, setResetNewPw] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail || !resetNewPw) return;
+    setResetLoading(true);
+    setResetMsg('');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: resetEmail, new_password: resetNewPw }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Reset failed');
+      setResetMsg(`✅ Password reset for ${data.user.name} (${data.user.email})`);
+      setResetEmail('');
+      setResetNewPw('');
+    } catch (err: any) {
+      setResetMsg(`❌ ${err.message}`);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   // --- LOGIN ---
   if (!token) {
     return (
@@ -368,6 +399,54 @@ export default function AdminDashboard() {
         <p className="text-center text-xs text-gray-700 mt-8">
           HaulFlow Admin Portal · Turtle Logistics LLC
         </p>
+        </div>
+
+      {/* Support Tools */}
+      <div className="max-w-7xl mx-auto px-6 pb-12">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
+          <h2 className="text-sm font-bold text-gray-300 mb-4">🔧 Support Tools</h2>
+
+          <div className="mb-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">Reset User Password</h3>
+            <p className="text-xs text-gray-600 mb-3">Enter the user's email and set a new password. Use this to log into a customer's account for troubleshooting.</p>
+          </div>
+
+          <form onSubmit={handleResetPassword} className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Email</label>
+              <input
+                type="email"
+                value={resetEmail}
+                onChange={e => setResetEmail(e.target.value)}
+                placeholder="user@company.com"
+                className="px-3 py-2 rounded-lg text-sm bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500 text-white placeholder-gray-600 w-64"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">New Password</label>
+              <input
+                type="text"
+                value={resetNewPw}
+                onChange={e => setResetNewPw(e.target.value)}
+                placeholder="temp password"
+                className="px-3 py-2 rounded-lg text-sm bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500 text-white placeholder-gray-600 w-48"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={resetLoading || !resetEmail || !resetNewPw}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+              {resetLoading ? 'Resetting…' : 'Reset Password'}
+            </button>
+          </form>
+
+          {resetMsg && (
+            <p className={`text-xs mt-3 ${resetMsg.startsWith('✅') ? 'text-green-400' : 'text-red-400'}`}>
+              {resetMsg}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
