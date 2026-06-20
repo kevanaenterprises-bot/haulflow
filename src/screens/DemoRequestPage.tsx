@@ -31,11 +31,7 @@ export default function DemoRequestPage() {
     setError('');
 
     // 1) Capture the lead for sales (fire and forget, never blocks).
-    fetch('/api/demo-signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    }).catch(() => {});
+    api.post('/api/demo-signup', form).catch(() => {});
 
     // 2) Spin up the live demo and log the visitor in.
     try {

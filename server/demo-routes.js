@@ -4,6 +4,55 @@
 //        registerDemoRoutes(app, pool);
 
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
+
+// ---------------------------------------------------------------------------
+// Demo lead notification email
+// ---------------------------------------------------------------------------
+async function sendDemoLeadEmail(lead) {
+  const mailUser = process.env.MAIL_USER;
+  const mailPass = process.env.MAIL_PASS;
+  const recipient = process.env.MAIL_TO || 'kevanaenterprises@gmail.com';
+
+  if (!mailUser || !mailPass) {
+    console.warn('[DEMO-SIGNUP] Email not sent — MAIL_USER/MAIL_PASS not configured');
+    console.log('[DEMO-SIGNUP] Lead captured:', JSON.stringify(lead));
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.MAIL_HOST || 'smtp.gmail.com',
+    port: Number(process.env.MAIL_PORT) || 465,
+    secure: true,
+    auth: { user: mailUser, pass: mailPass },
+  });
+
+  const { name, email, company, phone, fleetSize, notes } = lead;
+  await transporter.sendMail({
+    from: `"HaulFlow Demo" <${mailUser}>`,
+    to: recipient,
+    subject: `🚛 New HaulFlow Demo Request — ${company || name}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:540px;color:#1a1a1a;padding:24px;">
+        <div style="background:#1e40af;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0;">
+          <h2 style="margin:0;font-size:18px;">🚛 New HaulFlow Demo Request</h2>
+        </div>
+        <div style="border:1px solid #e5e7eb;border-top:none;padding:20px;border-radius:0 0 10px 10px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:8px 0;color:#6b7280;width:130px;font-size:14px;">Name</td><td style="padding:8px 0;font-weight:600;font-size:14px;">${name || '—'}</td></tr>
+            <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Email</td><td style="padding:8px 0;font-size:14px;"><a href="mailto:${email}" style="color:#1e40af;">${email || '—'}</a></td></tr>
+            <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Company</td><td style="padding:8px 0;font-weight:600;font-size:14px;">${company || '—'}</td></tr>
+            <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Phone</td><td style="padding:8px 0;font-size:14px;">${phone || '—'}</td></tr>
+            <tr><td style="padding:8px 0;color:#6b7280;font-size:14px;">Fleet Size</td><td style="padding:8px 0;font-size:14px;">${fleetSize || '—'}</td></tr>
+            ${notes ? `<tr><td style="padding:8px 0;color:#6b7280;font-size:14px;vertical-align:top;">Notes</td><td style="padding:8px 0;font-size:14px;">${notes}</td></tr>` : ''}
+          </table>
+          <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb;"/>
+          <p style="color:#9ca3af;font-size:12px;margin:0;">Submitted via haulflow.turtlelogisticsllc.com</p>
+        </div>
+      </div>
+    `,
+  });
+}
 
 const STAGES = [
   'WAITING_DISPATCH',   // Waiting on Dispatch
@@ -50,6 +99,16 @@ function daysFromNow(n) {
 }
 
 export function registerDemoRoutes(app, pool) {
+
+  // POST /api/demo-signup — capture lead & email notification (no auth required)
+  app.post('/api/demo-signup', async (req, res) => {
+    const lead = req.body || {};
+    // Fire-and-forget email — never block the prospect
+    sendDemoLeadEmail(lead).catch(err => {
+      console.error('[DEMO-SIGNUP] email error:', err?.message || err);
+    });
+    res.status(200).json({ success: true });
+  });
 
   app.post('/api/demo/start', async (req, res) => {
     const client = await pool.connect();
