@@ -755,37 +755,128 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
 // ---------------------------------------------------------------------------
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 
+// Pricing tiers configuration
+const PLANS = {
+  'founding-1yr': {
+    label: 'Founding Owner-Op',
+    amount: 15000, // $150/mo after trial
+    trialDays: 365, // 1 year free
+    description: '1 year free, then $150/mo. 1 truck. Android only.',
+    slotLimit: 12,
+    slotStatus: 'founding_1yr',
+    requiresAndroid: true,
+  },
+  'founding-6mo': {
+    label: 'Early Adopter Owner-Op',
+    amount: 15000, // $150/mo after trial
+    trialDays: 182, // ~6 months free
+    description: '6 months free, then $150/mo. 1 truck.',
+    slotLimit: 15,
+    slotStatus: 'founding_6mo',
+    requiresAndroid: false,
+  },
+  'fleet-20': {
+    label: 'Fleet (2–20 trucks)',
+    amount: 35000, // $350/mo
+    trialDays: 0,
+    description: '2–20 trucks. Full platform. Cancel anytime.',
+    slotLimit: Infinity,
+    slotStatus: null,
+    requiresAndroid: false,
+  },
+  'fleet-50': {
+    label: 'Fleet (21–50 trucks)',
+    amount: 55000, // $550/mo
+    trialDays: 0,
+    description: '21–50 trucks. Full platform. Cancel anytime.',
+    slotLimit: Infinity,
+    slotStatus: null,
+    requiresAndroid: false,
+  },
+};
+
+// GET /api/pricing — returns available tiers with slot counts
+app.get('/api/pricing', async (_req, res) => {
+  try {
+    const tiers = [];
+
+    for (const [id, plan] of Object.entries(PLANS)) {
+      const tier = {
+        id,
+        label: plan.label,
+        amount: plan.amount,
+        trialDays: plan.trialDays,
+        description: plan.description,
+        requiresAndroid: plan.requiresAndroid,
+        slotsRemaining: null,
+      };
+
+      if (plan.slotStatus) {
+        const result = await pool.query(
+          `SELECT COUNT(*)::int AS taken FROM companies WHERE subscription_status = $1`,
+          [plan.slotStatus]
+        );
+        tier.slotsRemaining = Math.max(0, plan.slotLimit - (result.rows[0]?.taken || 0));
+      }
+
+      tiers.push(tier);
+    }
+
+    res.json(tiers);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch pricing' });
+  }
+});
+
 // POST /api/create-checkout-session — creates a Stripe Checkout session
 app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
   try {
     if (!STRIPE_SECRET_KEY) {
-      return res.status(500).json({ error: 'Stripe not configured. Please contact support.' });
+      return res.status(500).json({ error: 'Payment system not configured. Please contact support.' });
     }
 
-    const { plan } = req.body || {}; // plan: 'owner-op' | 'fleet'
-    const amount = plan === 'fleet' ? 35000 : 15000; // $350 or $150 in cents
-    const planLabel = plan === 'fleet' ? 'Fleet Plan' : 'Owner-Operator Plan';
+    const { plan: planId } = req.body || {};
+    const plan = PLANS[planId];
 
-    // Get company info for metadata
-    const company = await pool.query('SELECT name, email FROM companies WHERE id = $1', [req.user.company_id]);
-    const co = company.rows[0] || {};
+    if (!plan) {
+      return res.status(400).json({ error: 'Invalid plan selected.' });
+    }
+
+    // Check founding slot availability
+    if (plan.slotStatus) {
+      const result = await pool.query(
+        `SELECT COUNT(*)::int AS taken FROM companies WHERE subscription_status = $1`,
+        [plan.slotStatus]
+      );
+      const taken = result.rows[0]?.taken || 0;
+      if (taken >= plan.slotLimit) {
+        return res.status(403).json({ error: 'This founding slot has been claimed. Choose another plan.' });
+      }
+    }
 
     const params = new URLSearchParams({
       'payment_method_types[]': 'card',
       'mode': 'subscription',
       'line_items[0][price_data][currency]': 'usd',
-      'line_items[0][price_data][product_data][name]': `HaulFlow TMS — ${planLabel}`,
-      'line_items[0][price_data][product_data][description]': 'Full TMS platform. Cancel anytime.',
+      'line_items[0][price_data][product_data][name]': `HaulFlow TMS — ${plan.label}`,
+      'line_items[0][price_data][product_data][description]': plan.description,
       'line_items[0][price_data][recurring][interval]': 'month',
-      'line_items[0][price_data][unit_amount]': String(amount),
+      'line_items[0][price_data][unit_amount]': String(plan.amount),
       'line_items[0][quantity]': '1',
       'customer_email': req.user.email,
       'metadata[company_id]': req.user.company_id,
       'metadata[user_id]': req.user.user_id,
+      'metadata[plan]': planId,
       'subscription_data[metadata][company_id]': req.user.company_id,
+      'subscription_data[metadata][plan]': planId,
       'success_url': `${process.env.PUBLIC_URL || 'https://haulflow.turtlelogisticsllc.com'}/setup`,
       'cancel_url': `${process.env.PUBLIC_URL || 'https://haulflow.turtlelogisticsllc.com'}/subscribe`,
     });
+
+    // Add trial period for founding tiers
+    if (plan.trialDays > 0) {
+      params.append('subscription_data[trial_period_days]', String(plan.trialDays));
+    }
 
     const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
@@ -803,6 +894,15 @@ app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
     }
 
     const session = await response.json();
+
+    // Claim the founding slot immediately (before payment completes)
+    if (plan.slotStatus) {
+      await pool.query(
+        `UPDATE companies SET subscription_status = $1 WHERE id = $2 AND subscription_status = 'trial'`,
+        [plan.slotStatus, req.user.company_id]
+      );
+    }
+
     res.json({ url: session.url, id: session.id });
   } catch (err) {
     console.error('[STRIPE] Checkout session error:', err.message);
@@ -812,7 +912,6 @@ app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
 
 // POST /api/stripe/webhook — Stripe webhook for payment events
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
   if (!webhookSecret) {
@@ -823,45 +922,82 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   let event;
   try {
     event = JSON.parse(req.body);
-    // In production, verify with stripe.webhooks.constructEvent()
-    // const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
     console.error('[STRIPE] Webhook parse error:', err.message);
     return res.status(400).send('Webhook error');
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const companyId = session.metadata?.company_id;
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const companyId = session.metadata?.company_id;
+        const plan = session.metadata?.plan;
 
-    if (companyId) {
-      try {
-        await pool.query(
-          `UPDATE companies SET subscription_status = 'active' WHERE id = $1`,
-          [companyId]
-        );
-        console.log(`[STRIPE] Subscription activated for company ${companyId}`);
-      } catch (err) {
-        console.error(`[STRIPE] Failed to update company ${companyId}:`, err.message);
+        if (!companyId) break;
+
+        // Store Stripe customer ID
+        if (session.customer) {
+          await pool.query(
+            'UPDATE companies SET stripe_customer_id = $1 WHERE id = $2',
+            [session.customer, companyId]
+          );
+        }
+
+        // For paid plans, set active. For founding plans, status was already set at checkout creation.
+        const planConfig = PLANS[plan];
+        if (planConfig && !planConfig.slotStatus) {
+          await pool.query(
+            "UPDATE companies SET subscription_status = 'active' WHERE id = $1",
+            [companyId]
+          );
+        }
+
+        console.log(`[STRIPE] Checkout completed for company ${companyId} (plan: ${plan})`);
+        break;
+      }
+
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const companyId = sub.metadata?.company_id;
+
+        if (!companyId) break;
+
+        // Handle trial ending → subscription going active
+        if (sub.status === 'active' && !sub.trial_end) {
+          await pool.query(
+            "UPDATE companies SET subscription_status = 'active' WHERE id = $1",
+            [companyId]
+          );
+          console.log(`[STRIPE] Trial ended, subscription active for company ${companyId}`);
+        }
+
+        // Handle cancellation
+        if (sub.status === 'canceled') {
+          await pool.query(
+            "UPDATE companies SET subscription_status = 'cancelled' WHERE id = $1",
+            [companyId]
+          );
+          console.log(`[STRIPE] Subscription cancelled for company ${companyId}`);
+        }
+
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        const subId = invoice.subscription;
+
+        if (subId) {
+          // Find company by looking up their latest subscription
+          console.warn(`[STRIPE] Payment failed for subscription ${subId}`);
+          // TODO: notify company admin via email
+        }
+        break;
       }
     }
-  }
-
-  if (event.type === 'customer.subscription.deleted') {
-    const sub = event.data.object;
-    const companyId = sub.metadata?.company_id;
-
-    if (companyId) {
-      try {
-        await pool.query(
-          `UPDATE companies SET subscription_status = 'cancelled' WHERE id = $1`,
-          [companyId]
-        );
-        console.log(`[STRIPE] Subscription cancelled for company ${companyId}`);
-      } catch (err) {
-        console.error(`[STRIPE] Failed to cancel company ${companyId}:`, err.message);
-      }
-    }
+  } catch (err) {
+    console.error('[STRIPE] Webhook handler error:', err.message);
   }
 
   res.status(200).end();
