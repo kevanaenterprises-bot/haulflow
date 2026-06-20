@@ -268,6 +268,9 @@ export default function AdminDashboard() {
           <button onClick={() => loadData(token)} className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
             <RefreshCw className="w-3 h-3" /> Refresh
           </button>
+          <a href="/driver" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition-colors">
+            <Truck className="w-3 h-3" /> Driver Portal
+          </a>
           <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors">
             <LogOut className="w-3 h-3" /> Logout
           </button>
