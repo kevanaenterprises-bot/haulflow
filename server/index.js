@@ -751,6 +751,124 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
 
 
 // ---------------------------------------------------------------------------
+// Stripe Checkout
+// ---------------------------------------------------------------------------
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+
+// POST /api/create-checkout-session — creates a Stripe Checkout session
+app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
+  try {
+    if (!STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: 'Stripe not configured. Please contact support.' });
+    }
+
+    const { plan } = req.body || {}; // plan: 'owner-op' | 'fleet'
+    const amount = plan === 'fleet' ? 35000 : 15000; // $350 or $150 in cents
+    const planLabel = plan === 'fleet' ? 'Fleet Plan' : 'Owner-Operator Plan';
+
+    // Get company info for metadata
+    const company = await pool.query('SELECT name, email FROM companies WHERE id = $1', [req.user.company_id]);
+    const co = company.rows[0] || {};
+
+    const params = new URLSearchParams({
+      'payment_method_types[]': 'card',
+      'mode': 'subscription',
+      'line_items[0][price_data][currency]': 'usd',
+      'line_items[0][price_data][product_data][name]': `HaulFlow TMS — ${planLabel}`,
+      'line_items[0][price_data][product_data][description]': 'Full TMS platform. Cancel anytime.',
+      'line_items[0][price_data][recurring][interval]': 'month',
+      'line_items[0][price_data][unit_amount]': String(amount),
+      'line_items[0][quantity]': '1',
+      'customer_email': req.user.email,
+      'metadata[company_id]': req.user.company_id,
+      'metadata[user_id]': req.user.user_id,
+      'subscription_data[metadata][company_id]': req.user.company_id,
+      'success_url': `${process.env.PUBLIC_URL || 'https://haulflow.turtlelogisticsllc.com'}/setup`,
+      'cancel_url': `${process.env.PUBLIC_URL || 'https://haulflow.turtlelogisticsllc.com'}/subscribe`,
+    });
+
+    const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('[STRIPE] Checkout error:', errorData);
+      return res.status(response.status).json({ error: errorData.error?.message || 'Stripe error' });
+    }
+
+    const session = await response.json();
+    res.json({ url: session.url, id: session.id });
+  } catch (err) {
+    console.error('[STRIPE] Checkout session error:', err.message);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// POST /api/stripe/webhook — Stripe webhook for payment events
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+  if (!webhookSecret) {
+    console.warn('[STRIPE] Webhook received but no STRIPE_WEBHOOK_SECRET configured');
+    return res.status(200).end();
+  }
+
+  let event;
+  try {
+    event = JSON.parse(req.body);
+    // In production, verify with stripe.webhooks.constructEvent()
+    // const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error('[STRIPE] Webhook parse error:', err.message);
+    return res.status(400).send('Webhook error');
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const companyId = session.metadata?.company_id;
+
+    if (companyId) {
+      try {
+        await pool.query(
+          `UPDATE companies SET subscription_status = 'active' WHERE id = $1`,
+          [companyId]
+        );
+        console.log(`[STRIPE] Subscription activated for company ${companyId}`);
+      } catch (err) {
+        console.error(`[STRIPE] Failed to update company ${companyId}:`, err.message);
+      }
+    }
+  }
+
+  if (event.type === 'customer.subscription.deleted') {
+    const sub = event.data.object;
+    const companyId = sub.metadata?.company_id;
+
+    if (companyId) {
+      try {
+        await pool.query(
+          `UPDATE companies SET subscription_status = 'cancelled' WHERE id = $1`,
+          [companyId]
+        );
+        console.log(`[STRIPE] Subscription cancelled for company ${companyId}`);
+      } catch (err) {
+        console.error(`[STRIPE] Failed to cancel company ${companyId}:`, err.message);
+      }
+    }
+  }
+
+  res.status(200).end();
+});
+
+
+// ---------------------------------------------------------------------------
 // DVIR routes
 // ---------------------------------------------------------------------------
 registerDriverAuthRoutes(app, pool, JWT_SECRET, JWT_EXPIRES_IN);

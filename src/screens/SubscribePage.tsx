@@ -1,7 +1,39 @@
 import { useState } from 'react';
 import { Truck, ArrowRight, Sparkles, CreditCard, Lock } from 'lucide-react';
+import { api } from '../lib/api';
+
+interface PlanOption {
+  id: string;
+  label: string;
+  price: string;
+  period: string;
+  amount: number; // cents
+  features: string[];
+  highlight?: boolean;
+}
+
+const PLANS: PlanOption[] = [
+  {
+    id: 'owner-op',
+    label: 'Owner-Operator',
+    price: '$150',
+    period: '/mo',
+    amount: 15000,
+    features: ['Full platform access', 'Live GPS & dispatch', 'Automated invoicing', 'IFTA reports', 'Road Tour for drivers'],
+  },
+  {
+    id: 'fleet',
+    label: 'Fleet',
+    price: '$350',
+    period: '/mo',
+    amount: 35000,
+    highlight: true,
+    features: ['Everything in Owner-Op', 'Unlimited trucks & drivers', 'Driver portal & pre-trip', 'Geo-digital timestamps', 'Priority support'],
+  },
+];
 
 export default function SubscribePage() {
+  const [selectedPlan, setSelectedPlan] = useState<string>('owner-op');
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
@@ -26,19 +58,20 @@ export default function SubscribePage() {
     setLoading(true);
     setPayError('');
     try {
-      const res = await fetch('/api/create-checkout-session', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        setPayError(data.error || 'Could not start checkout. Please try again.');
+      const data = await api.post('/api/create-checkout-session', { plan: selectedPlan });
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setPayError('Could not start checkout. Please try again.');
         setLoading(false);
-        return;
       }
-      window.location.href = data.url;
-    } catch {
-      setPayError('Network error. Please try again.');
+    } catch (err: any) {
+      setPayError(err.message || 'Network error. Please try again.');
       setLoading(false);
     }
   };
+
+  const activePlan = PLANS.find(p => p.id === selectedPlan)!;
 
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans flex flex-col">
@@ -58,7 +91,7 @@ export default function SubscribePage() {
 
       {/* MAIN */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-lg">
 
           {/* Card */}
           <div
@@ -76,19 +109,45 @@ export default function SubscribePage() {
               <p className="text-gray-400 text-sm leading-relaxed">
                 You&apos;ve seen the demo. Ready to run your operation on HaulFlow?
                 <br />
-                Subscribe below to get started.
+                Pick your plan and subscribe below.
               </p>
             </div>
 
-            {/* Pricing */}
-            <div className="bg-blue-950 border border-blue-800 rounded-xl p-5 mb-6 text-center">
-              <div className="flex items-baseline justify-center gap-1 mb-1">
-                <span className="text-4xl font-black text-white">$350</span>
-                <span className="text-gray-400 text-lg">/mo</span>
-              </div>
-              <p className="text-blue-300 text-xs">
-                All features &middot; Unlimited users &middot; No contracts &middot; Cancel anytime
-              </p>
+            {/* Plan Selector */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {PLANS.map(plan => (
+                <button
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan.id)}
+                  className={`rounded-xl border-2 p-4 text-left transition-all ${
+                    selectedPlan === plan.id
+                      ? 'border-blue-500 bg-blue-950/50'
+                      : 'border-gray-700 bg-gray-900/50 hover:border-gray-600'
+                  }`}
+                >
+                  <div className="flex items-baseline gap-1 mb-1">
+                    <span className={`text-2xl font-black ${selectedPlan === plan.id ? 'text-white' : 'text-gray-300'}`}>
+                      {plan.price}
+                    </span>
+                    <span className="text-gray-500 text-sm">{plan.period}</span>
+                  </div>
+                  <p className={`text-sm font-semibold ${selectedPlan === plan.id ? 'text-blue-300' : 'text-gray-500'}`}>
+                    {plan.label}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {/* Features */}
+            <div className="bg-gray-900/80 rounded-xl p-4 mb-6">
+              <ul className="space-y-2">
+                {activePlan.features.map(f => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
+                    <span className="text-green-400 mt-0.5">✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
             </div>
 
             {/* Subscribe Button */}
@@ -100,7 +159,10 @@ export default function SubscribePage() {
                 style={{ boxShadow: '0 6px 25px rgba(37,99,235,0.45)' }}
               >
                 <Lock className="w-4 h-4" />
-                {loading ? 'Redirecting to Stripe\u2026' : 'Subscribe & Start Setup'}
+                {loading
+                  ? 'Redirecting to Stripe…'
+                  : `Subscribe ${activePlan.price}/mo & Start Setup`
+                }
                 {!loading && <ArrowRight className="w-4 h-4" />}
               </button>
               {payError && (
@@ -113,9 +175,9 @@ export default function SubscribePage() {
               <span className="flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Secure checkout
               </span>
-              <span>&middot;</span>
+              <span>·</span>
               <span>Cancel anytime</span>
-              <span>&middot;</span>
+              <span>·</span>
               <span>No setup fees</span>
             </div>
 
