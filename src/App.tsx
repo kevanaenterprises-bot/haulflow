@@ -26,8 +26,25 @@ import AdminDashboard from './screens/AdminDashboard';
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'inspections' | 'settings';
 
 function DriverPortal() {
+      // Check for impersonation token in URL params first
+      const urlParams = new URLSearchParams(window.location.search);
+      const impToken = urlParams.get('token');
+      const impDriver = urlParams.get('driver');
+
       const stored = localStorage.getItem('hf_driver');
-      const [driver, setDriver] = useState(stored ? JSON.parse(stored) : null);
+      const [driver, setDriver] = useState(() => {
+        if (impToken && impDriver) {
+          try {
+            const d = JSON.parse(decodeURIComponent(impDriver));
+            localStorage.setItem('hf_driver_token', impToken);
+            localStorage.setItem('hf_driver', JSON.stringify(d));
+            // Clean URL params
+            window.history.replaceState({}, '', '/driver');
+            return d;
+          } catch { /* fall through to stored/null */ }
+        }
+        return stored ? JSON.parse(stored) : null;
+      });
 
   if (!driver) {
           return <DriverLoginPage onLogin={(_token, d) => setDriver(d)} />;

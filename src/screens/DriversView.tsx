@@ -87,6 +87,18 @@ export default function DriversView() {
               {d.termination_date && <div className="text-xs text-red-400">Terminated: {toDateStr(d.termination_date)}</div>}
             </div>
             <div className="flex gap-2 mt-3 flex-wrap">
+              <button
+                onClick={async () => {
+                  try {
+                    const data = await api.post(`/api/drivers/${d.id}/impersonate`, {});
+                    const driverUrl = `${window.location.origin}/driver?token=${data.token}&driver=${encodeURIComponent(JSON.stringify(data.driver))}`;
+                    window.open(driverUrl, '_blank');
+                  } catch (e: any) { alert(e.message); }
+                }}
+                className="flex items-center gap-1 text-xs text-cyan-600 hover:underline font-medium"
+              >
+                <ExternalLink className="w-3 h-3" /> View as Driver
+              </button>
               {d.cdl_file_url && (
                 <a href={d.cdl_file_url} target="_blank" rel="noreferrer"
                   className="flex items-center gap-1 text-xs text-brand-600 hover:underline">
