@@ -173,6 +173,118 @@ function driverAuthMiddleware(req, res, next) {
   }
 }
 
+// Admin auth — simple password-based, separate from tenant auth
+function adminAuthMiddleware(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const token = header.slice(7);
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).json({ error: 'Admin not configured' });
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.role !== 'platform_admin' || decoded.admin_pw !== ADMIN_PASSWORD) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// POST /api/admin/login — platform admin login
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+
+    if (!password || password !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Invalid admin password' });
+    }
+
+    const token = jwt.sign(
+      { role: 'platform_admin', admin_pw: password },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// GET /api/admin/customers — list all companies with subscription info
+app.get('/api/admin/customers', adminAuthMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        c.id, c.name, c.email, c.phone, c.city, c.state,
+        c.stripe_customer_id, c.subscription_status, c.trial_ends_at, c.created_at,
+        c.invoice_prefix, c.payment_terms,
+        (SELECT COUNT(*)::int FROM drivers WHERE company_id = c.id) AS driver_count,
+        (SELECT COUNT(*)::int FROM loads WHERE company_id = c.id) AS load_count,
+        (SELECT COUNT(*)::int FROM invoices WHERE company_id = c.id) AS invoice_count,
+        (SELECT COUNT(*)::int FROM users WHERE company_id = c.id) AS user_count
+      FROM companies c
+      ORDER BY c.created_at DESC
+    `);
+
+    // Count founding slots
+    const founding1yr = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM companies WHERE subscription_status = 'founding_1yr'`
+    );
+    const founding6mo = await pool.query(
+      `SELECT COUNT(*)::int AS count FROM companies WHERE subscription_status = 'founding_6mo'`
+    );
+
+    res.json({
+      companies: result.rows,
+      slots: {
+        founding_1yr_used: founding1yr.rows[0]?.count || 0,
+        founding_1yr_total: 12,
+        founding_1yr_remaining: Math.max(0, 12 - (founding1yr.rows[0]?.count || 0)),
+        founding_6mo_used: founding6mo.rows[0]?.count || 0,
+        founding_6mo_total: 15,
+        founding_6mo_remaining: Math.max(0, 15 - (founding6mo.rows[0]?.count || 0)),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch customers', details: err.message });
+  }
+});
+
+// GET /api/admin/stats — platform-wide stats
+app.get('/api/admin/stats', adminAuthMiddleware, async (_req, res) => {
+  try {
+    const total = await pool.query('SELECT COUNT(*)::int AS count FROM companies');
+    const active = await pool.query("SELECT COUNT(*)::int AS count FROM companies WHERE subscription_status = 'active'");
+    const trial = await pool.query("SELECT COUNT(*)::int AS count FROM companies WHERE subscription_status LIKE 'founding%'");
+    const cancelled = await pool.query("SELECT COUNT(*)::int AS count FROM companies WHERE subscription_status = 'cancelled'");
+    const totalUsers = await pool.query('SELECT COUNT(*)::int AS count FROM users');
+    const totalDrivers = await pool.query('SELECT COUNT(*)::int AS count FROM drivers');
+    const totalLoads = await pool.query('SELECT COUNT(*)::int AS count FROM loads');
+    const totalInvoices = await pool.query('SELECT COUNT(*)::int AS count FROM invoices');
+
+    res.json({
+      companies: {
+        total: total.rows[0]?.count || 0,
+        active: active.rows[0]?.count || 0,
+        inTrial: trial.rows[0]?.count || 0,
+        cancelled: cancelled.rows[0]?.count || 0,
+      },
+      totalUsers: totalUsers.rows[0]?.count || 0,
+      totalDrivers: totalDrivers.rows[0]?.count || 0,
+      totalLoads: totalLoads.rows[0]?.count || 0,
+      totalInvoices: totalInvoices.rows[0]?.count || 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch stats', details: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Health check (Railway uses this)
 // ---------------------------------------------------------------------------

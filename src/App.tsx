@@ -21,6 +21,7 @@ import InspectionsView from './screens/InspectionsView';
 import DriverLoginPage from './screens/driver/DriverLoginPage';
 import DriverDashboard from './screens/driver/DriverDashboard';
 import PrivacyPolicyPage from './screens/PrivacyPolicyPage';
+import AdminDashboard from './screens/AdminDashboard';
 
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'inspections' | 'settings';
 
@@ -94,6 +95,10 @@ export default function App() {
     
       if (path === '/subscribe' || path === '/subscribe/') {
               return <SubscribePage />;
+      }
+
+      if (path === '/admin' || path === '/admin/') {
+              return <AdminDashboard />;
       }
     
       if (path === '/setup' || path === '/setup/') {
