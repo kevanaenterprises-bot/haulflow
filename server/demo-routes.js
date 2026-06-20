@@ -21,9 +21,9 @@ async function sendDemoLeadEmail(lead) {
   }
 
   const transporter = nodemailer.createTransport({
-    host: process.env.MAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.MAIL_PORT) || 465,
-    secure: true,
+    host: process.env.MAIL_HOST || 'smtp-mail.outlook.com',
+    port: Number(process.env.MAIL_PORT) || 587,
+    secure: false, // STARTTLS (port 587), not SSL (465)
     auth: { user: mailUser, pass: mailPass },
   });
 
