@@ -107,6 +107,24 @@ async function runMigrations() {
       path VARCHAR(200),
       created_at TIMESTAMPTZ DEFAULT NOW()
     )`,
+    // platform activity feed
+    `CREATE TABLE IF NOT EXISTS platform_activity (
+      id SERIAL PRIMARY KEY,
+      type VARCHAR(50),
+      detail TEXT,
+      company_id UUID,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    // platform error log
+    `CREATE TABLE IF NOT EXISTS platform_errors (
+      id SERIAL PRIMARY KEY,
+      method VARCHAR(10),
+      path VARCHAR(200),
+      error_message TEXT,
+      status_code INTEGER,
+      ip VARCHAR(45),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
     ];
     for (const sql of migrations) {
       try { await pool.query(sql); } catch (e) { /* column may already exist, that's fine */ }

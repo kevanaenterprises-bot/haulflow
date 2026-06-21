@@ -156,7 +156,7 @@ export default function AdminDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [customersRes, statsRes, healthRes, errorsRes, activityRes, visitorsRes] = await Promise.all([
+      const results = await Promise.allSettled([
         adminFetch('/api/admin/customers', t),
         adminFetch('/api/admin/stats', t),
         adminFetch('/api/admin/health', t),
@@ -164,13 +164,16 @@ export default function AdminDashboard() {
         adminFetch('/api/admin/activity', t),
         adminFetch('/api/admin/visitors?days=30', t),
       ]);
-      setCompanies(customersRes.companies || []);
-      setSlots(customersRes.slots || null);
-      setStats(statsRes);
-      setHealth(healthRes);
-      setErrors(errorsRes || []);
-      setActivity(activityRes || []);
-      setVisitorStats(visitorsRes);
+      const val = (i: number, fallback: any = null) =>
+        results[i].status === 'fulfilled' ? results[i].value : fallback;
+
+      setCompanies(val(0, { companies: [] }).companies || []);
+      setSlots(val(0, { slots: null }).slots || null);
+      setStats(val(1));
+      setHealth(val(2));
+      setErrors(val(3, []));
+      setActivity(val(4, []));
+      setVisitorStats(val(5));
     } catch (err: any) {
       setError(err.message);
       if (err.message.includes('Unauthorized') || err.message.includes('Invalid')) {
