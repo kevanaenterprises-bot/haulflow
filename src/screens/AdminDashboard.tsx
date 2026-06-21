@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Truck, LogOut, RefreshCw, Activity, AlertTriangle, CheckCircle, XCircle, Clock, Server } from 'lucide-react';
+import { Truck, LogOut, RefreshCw, Activity, AlertTriangle, CheckCircle, XCircle, Clock, Server, Globe } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://haulflow-production-575a.up.railway.app';
 
@@ -70,6 +70,29 @@ interface ActivityEvent {
   created_at: string;
 }
 
+interface VisitorLog {
+  id: number;
+  ip: string;
+  country: string;
+  region: string;
+  city: string;
+  lat: number;
+  lon: number;
+  timezone: string;
+  user_agent: string;
+  referrer: string;
+  path: string;
+  created_at: string;
+}
+
+interface VisitorStats {
+  period_days: number;
+  total_visits: number;
+  unique_visitors: number;
+  top_countries: { country: string; visits: number }[];
+  recent: VisitorLog[];
+}
+
 function formatDate(iso: string) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -110,7 +133,7 @@ function activityIcon(type: string) {
   return <Activity className="w-3.5 h-3.5 text-blue-400" />;
 }
 
-type Tab = 'overview' | 'errors' | 'activity';
+type Tab = 'overview' | 'errors' | 'activity' | 'visitors';
 
 export default function AdminDashboard() {
   const [token, setToken] = useState(() => localStorage.getItem('hf_admin_token') || '');
@@ -124,6 +147,7 @@ export default function AdminDashboard() {
   const [health, setHealth] = useState<HealthCheck | null>(null);
   const [errors, setErrors] = useState<PlatformError[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<Tab>('overview');
@@ -132,12 +156,13 @@ export default function AdminDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [customersRes, statsRes, healthRes, errorsRes, activityRes] = await Promise.all([
+      const [customersRes, statsRes, healthRes, errorsRes, activityRes, visitorsRes] = await Promise.all([
         adminFetch('/api/admin/customers', t),
         adminFetch('/api/admin/stats', t),
         adminFetch('/api/admin/health', t),
         adminFetch('/api/admin/errors', t),
         adminFetch('/api/admin/activity', t),
+        adminFetch('/api/admin/visitors?days=30', t),
       ]);
       setCompanies(customersRes.companies || []);
       setSlots(customersRes.slots || null);
@@ -145,6 +170,7 @@ export default function AdminDashboard() {
       setHealth(healthRes);
       setErrors(errorsRes || []);
       setActivity(activityRes || []);
+      setVisitorStats(visitorsRes);
     } catch (err: any) {
       setError(err.message);
       if (err.message.includes('Unauthorized') || err.message.includes('Invalid')) {
@@ -279,6 +305,7 @@ export default function AdminDashboard() {
           ['overview', '📊 Overview'],
           ['errors', `🚨 Errors${errors.length > 0 ? ` (${errors.length})` : ''}`],
           ['activity', '📡 Activity'],
+          ['visitors', '🌍 Visitors'],
         ] as [Tab, string][]).map(([id, label]) => (
           <button
             key={id}
@@ -479,6 +506,108 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==================== VISITORS TAB ==================== */}
+        {tab === 'visitors' && (
+          <div>
+            <h2 className="text-sm font-bold text-gray-300 mb-4">🌍 Demo Page Visitors</h2>
+
+            {visitorStats ? (
+              <>
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1 flex items-center gap-1.5 text-blue-400">
+                      <Globe className="w-3.5 h-3.5" /> Total Visits
+                    </div>
+                    <p className="text-2xl font-black">{visitorStats.total_visits}</p>
+                    <p className="text-xs text-gray-600">last {visitorStats.period_days} days</p>
+                  </div>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1 flex items-center gap-1.5 text-green-400">
+                      <span className="text-xs">👥</span> Unique Visitors
+                    </div>
+                    <p className="text-2xl font-black">{visitorStats.unique_visitors}</p>
+                    <p className="text-xs text-gray-600">by IP address</p>
+                  </div>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <div className="text-xs text-gray-500 mb-1 flex items-center gap-1.5 text-purple-400">
+                      <span className="text-xs">📍</span> Countries
+                    </div>
+                    <p className="text-2xl font-black">{visitorStats.top_countries.length}</p>
+                    <p className="text-xs text-gray-600">unique regions</p>
+                  </div>
+                </div>
+
+                {/* Top Countries */}
+                {visitorStats.top_countries.length > 0 && (
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">Top Countries</h3>
+                    <div className="space-y-2">
+                      {visitorStats.top_countries.map((c, i) => (
+                        <div key={c.country} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-600 w-4">{i + 1}</span>
+                          <div className="flex-1 bg-gray-800 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{ width: `${(c.visits / visitorStats.top_countries[0].visits) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-sm text-gray-300 w-32 text-right truncate">{c.country}</span>
+                          <span className="text-xs font-bold text-gray-400 w-8 text-right">{c.visits}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Visits */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-800">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase">Recent Visits</h3>
+                  </div>
+                  {visitorStats.recent.length === 0 ? (
+                    <p className="text-gray-600 text-sm text-center py-12">No visits recorded yet</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-800 text-xs text-gray-500 uppercase">
+                            <th className="text-left px-4 py-3">Time</th>
+                            <th className="text-left px-4 py-3">Location</th>
+                            <th className="text-left px-4 py-3">Page</th>
+                            <th className="text-left px-4 py-3">Referrer</th>
+                            <th className="text-left px-4 py-3">IP</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visitorStats.recent.map(v => (
+                            <tr key={v.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                              <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{formatTime(v.created_at)}</td>
+                              <td className="px-4 py-3">
+                                <span className="text-gray-300">{v.city || '—'}</span>
+                                {v.city && (v.region || v.country) && <span className="text-gray-600">, </span>}
+                                <span className="text-gray-500">{v.region || v.country || ''}</span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-400">{v.path}</td>
+                              <td className="px-4 py-3 text-gray-500 max-w-[200px] truncate">{v.referrer || <span className="text-gray-700">Direct</span>}</td>
+                              <td className="px-4 py-3 text-xs text-gray-600 font-mono">{v.ip}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+                <Globe className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+                <p className="text-gray-500">Loading visitor data…</p>
               </div>
             )}
           </div>

@@ -1,5 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "../components/Layout";
+
+const API_BASE = 'https://haulflow-production-575a.up.railway.app';
+
+// Visitor tracking — fire-and-forget, no impact on page
+function trackVisit() {
+  try {
+    fetch(`${API_BASE}/api/track-visit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: window.location.pathname,
+        referrer: document.referrer,
+        userAgent: navigator.userAgent,
+      }),
+    }).catch(() => {});
+  } catch {}
+}
 
 const fields = [
   { name: "name",      label: "Full Name",       type: "text",  placeholder: "Jane Smith",          required: true },
@@ -16,6 +33,9 @@ export default function Demo() {
   );
   const [sending, setSending] = useState(false);
   const [error, setError]     = useState(null);
+
+  // Track visit on mount
+  useEffect(() => { trackVisit(); }, []);
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });

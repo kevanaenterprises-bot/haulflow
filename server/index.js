@@ -92,10 +92,25 @@ async function runMigrations() {
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS load_id UUID`,
     // companies
     `ALTER TABLE companies ADD COLUMN IF NOT EXISTS shop_alert_email VARCHAR(255)`,
-  ];
-  for (const sql of migrations) {
-    try { await pool.query(sql); } catch (e) { /* column may already exist, that's fine */ }
-  }
+    // visitor tracking
+    `CREATE TABLE IF NOT EXISTS visitor_logs (
+      id SERIAL PRIMARY KEY,
+      ip VARCHAR(45),
+      country VARCHAR(100),
+      region VARCHAR(100),
+      city VARCHAR(100),
+      lat DECIMAL(10,7),
+      lon DECIMAL(10,7),
+      timezone VARCHAR(50),
+      user_agent TEXT,
+      referrer TEXT,
+      path VARCHAR(200),
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    ];
+    for (const sql of migrations) {
+      try { await pool.query(sql); } catch (e) { /* column may already exist, that's fine */ }
+    }
   console.log(`[migrations] ${migrations.length} migration checks completed`);
 }
 
@@ -337,7 +352,86 @@ app.delete('/api/admin/errors', adminAuthMiddleware, async (_req, res) => {
     await pool.query('DELETE FROM platform_errors');
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to clear errors' });
+    res.status(500).json({ error: 'Failed to clear errors', details: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Visitor tracking
+// ---------------------------------------------------------------------------
+
+// POST /api/track-visit — called by the demo page to log a visit
+app.post('/api/track-visit', async (req, res) => {
+  try {
+    const ip = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    const { path, referrer, userAgent } = req.body || {};
+
+    // Geo-IP lookup via free ip-api.com (no key needed, 45 req/min)
+    let geo = null;
+    try {
+      const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,timezone`);
+      if (geoRes.ok) {
+        const data = await geoRes.json();
+        if (data.status === 'success') geo = data;
+      }
+    } catch { /* geo lookup failed, log without it */ }
+
+    await pool.query(
+      `INSERT INTO visitor_logs (ip, country, region, city, lat, lon, timezone, user_agent, referrer, path)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        ip.substring(0, 45),
+        geo?.country || null,
+        geo?.regionName || null,
+        geo?.city || null,
+        geo?.lat || null,
+        geo?.lon || null,
+        geo?.timezone || null,
+        (userAgent || req.headers['user-agent'] || '').substring(0, 500),
+        (referrer || '').substring(0, 500),
+        (path || '/demo').substring(0, 200),
+      ]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    // Never let tracking errors break anything
+    res.json({ ok: true });
+  }
+});
+
+// GET /api/admin/visitors — visitor analytics for admin dashboard
+app.get('/api/admin/visitors', adminAuthMiddleware, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    const [visitsRes, statsRes, countryRes, recentRes] = await Promise.all([
+      // Total visits in period
+      pool.query('SELECT COUNT(*)::int AS count FROM visitor_logs WHERE created_at > $1', [since]),
+      // Unique IPs in period
+      pool.query('SELECT COUNT(DISTINCT ip)::int AS count FROM visitor_logs WHERE created_at > $1', [since]),
+      // Top countries
+      pool.query(
+        `SELECT country, COUNT(*)::int AS visits FROM visitor_logs WHERE created_at > $1 AND country IS NOT NULL GROUP BY country ORDER BY visits DESC LIMIT 10`,
+        [since]
+      ),
+      // Recent visits (last 50)
+      pool.query(
+        `SELECT * FROM visitor_logs WHERE created_at > $1 ORDER BY created_at DESC LIMIT 50`,
+        [since]
+      ),
+    ]);
+
+    res.json({
+      period_days: days,
+      total_visits: visitsRes.rows[0].count,
+      unique_visitors: statsRes.rows[0].count,
+      top_countries: countryRes.rows,
+      recent: recentRes.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch visitors', details: err.message });
   }
 });
 
