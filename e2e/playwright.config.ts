@@ -44,6 +44,7 @@ export default defineConfig({
 },
   ],
 
-  // Global setup tears down test data before each full run
+  // Global setup creates test context; globalTeardown cleans up test data
   globalSetup: './global-setup.ts',
+  globalTeardown: './global-setup.ts',
 });
