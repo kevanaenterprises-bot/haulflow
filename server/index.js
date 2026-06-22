@@ -803,10 +803,18 @@ app.post('/api/drivers', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
     const result = await pool.query(
-      `INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.company_id, b.name, b.phone, b.email, b.license_number, b.license_expiry, b.medical_card_expiry, b.hire_date, b.status || 'available']
+      `INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, status, termination_date, cdl_file_url, medical_card_file_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [req.user.company_id, b.name, b.phone || null, b.email || null, b.license_number || null, b.license_expiry || null, b.medical_card_expiry || null, b.hire_date || null, b.status || 'available', b.termination_date || null, b.cdl_file_url || null, b.medical_card_file_url || null]
     );
+
+    // Set driver portal password if provided
+    if (b.portal_password) {
+      const hash = crypto.createHash('sha256').update(b.portal_password).digest('hex');
+      await pool.query('UPDATE drivers SET password_hash = $1 WHERE id = $2', [hash, result.rows[0].id]);
+      result.rows[0].password_hash = hash;
+    }
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Failed to create driver', details: err.message });
