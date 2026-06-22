@@ -897,9 +897,9 @@ app.post('/api/shippers', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
     const result = await pool.query(
-      `INSERT INTO shippers (company_id, name, address, city, state, zip, contact_name, contact_phone, contact_email)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [req.user.company_id, b.name, b.address, b.city, b.state, b.zip, b.contact_name, b.phone || b.contact_phone, b.email || b.contact_email]
+      `INSERT INTO shippers (company_id, type, name, address, city, state, zip, contact_name, contact_phone, contact_email)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [req.user.company_id, b.type || 'shipper', b.name, b.address, b.city, b.state, b.zip, b.contact_name, b.contact_phone || b.phone || null, b.contact_email || b.email || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
