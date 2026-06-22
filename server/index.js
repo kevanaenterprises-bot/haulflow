@@ -6,6 +6,7 @@ import cors from 'cors';
 import pg from 'pg';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import rateLimit from 'express-rate-limit';
 import { registerDvirRoutes } from './dvir-routes.js';
 import { registerDemoRoutes } from './demo-routes.js';
@@ -574,6 +575,132 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   } catch (err) {
     console.error('[AUTH] Login error:', err.message);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Password reset — forgot password (send email with reset link)
+// ---------------------------------------------------------------------------
+const resetLimiter = rateLimit({ windowMs: 60_000, max: 3 });
+
+function getMailTransporter() {
+  const mailUser = process.env.MAIL_USER;
+  const mailPass = process.env.MAIL_PASS;
+  if (!mailUser || !mailPass) return null;
+  return nodemailer.createTransport({
+    host: process.env.MAIL_HOST || 'smtp-mail.outlook.com',
+    port: Number(process.env.MAIL_PORT) || 587,
+    secure: false,
+    auth: { user: mailUser, pass: mailPass },
+  });
+}
+
+app.post('/api/auth/forgot-password', resetLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const result = await pool.query(
+      'SELECT u.id, u.name, c.name AS company_name FROM users u JOIN companies c ON c.id = u.company_id WHERE u.email = $1 AND u.is_active = true',
+      [email.toLowerCase().trim()]
+    );
+    const user = result.rows[0];
+
+    // Always return success to avoid leaking which emails exist
+    if (!user) {
+      return res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await pool.query(
+      'DELETE FROM password_reset_tokens WHERE user_id = $1',
+      [user.id]
+    );
+    await pool.query(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at, created_at) VALUES ($1, $2, $3, NOW())',
+      [user.id, token, expiresAt]
+    );
+
+    const transporter = getMailTransporter();
+    const resetUrl = `${process.env.APP_URL || 'https://haulflow.turtlelogisticsllc.com'}/reset-password?token=${token}`;
+
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"HaulFlow" <${process.env.MAIL_USER}>`,
+        to: email,
+        subject: 'HaulFlow — Password Reset',
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a;">
+            <div style="background:#1e40af;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0;">
+              <h2 style="margin:0;font-size:18px;">🚛 HaulFlow Password Reset</h2>
+            </div>
+            <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 10px 10px;">
+              <p style="margin:0 0 16px;">Hi ${user.name || 'there'},</p>
+              <p style="margin:0 0 16px;">You requested a password reset for your HaulFlow account (<strong>${user.company_name}</strong>).</p>
+              <p style="margin:0 0 16px;">Click the button below to set a new password. This link expires in 1 hour.</p>
+              <div style="text-align:center;margin:24px 0;">
+                <a href="${resetUrl}" style="background:#1e40af;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">Reset Password</a>
+              </div>
+              <p style="margin:0 0 8px;color:#6b7280;font-size:13px;">If the button doesn't work, copy and paste this link into your browser:</p>
+              <p style="margin:0 0 16px;color:#6b7280;font-size:13px;word-break:break-all;">${resetUrl}</p>
+              <p style="margin:0;color:#9ca3af;font-size:12px;">If you didn't request this, you can safely ignore this email.</p>
+            </div>
+          </div>`,
+      });
+      console.log('[AUTH] Password reset email sent to:', email);
+    } else {
+      console.warn('[AUTH] Password reset email NOT sent — MAIL_USER/MAIL_PASS not configured');
+      console.log('[AUTH] Reset URL would be:', resetUrl);
+    }
+
+    res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+  } catch (err) {
+    console.error('[AUTH] Forgot password error:', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Password reset — set new password
+// ---------------------------------------------------------------------------
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    const tokenResult = await pool.query(
+      'SELECT * FROM password_reset_tokens WHERE token = $1 AND expires_at > NOW()',
+      [token]
+    );
+    const tokenRow = tokenResult.rows[0];
+    if (!tokenRow) {
+      return res.status(400).json({ error: 'Reset link is invalid or has expired.' });
+    }
+
+    const hash = crypto.createHash('sha256').update(password).digest('hex');
+    await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2',
+      [hash, tokenRow.user_id]
+    );
+    await pool.query(
+      'DELETE FROM password_reset_tokens WHERE user_id = $1',
+      [tokenRow.user_id]
+    );
+
+    console.log('[AUTH] Password reset successfully for user:', tokenRow.user_id);
+    res.json({ message: 'Password has been reset. You can now sign in.' });
+  } catch (err) {
+    console.error('[AUTH] Reset password error:', err.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 

@@ -24,6 +24,8 @@ import PrivacyPolicyPage from './screens/PrivacyPolicyPage';
 import AdminDashboard from './screens/AdminDashboard';
 import WhatIsHaulFlowPage from './screens/WhatIsHaulFlowPage';
 import ComparePage from './screens/ComparePage';
+import ForgotPasswordPage from './screens/ForgotPasswordPage';
+import ResetPasswordPage from './screens/ResetPasswordPage';
 
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'inspections' | 'settings';
 
@@ -122,6 +124,14 @@ export default function App() {
 
       if (path === '/compare' || path === '/compare/') {
               return <ComparePage />;
+      }
+
+      if (path === '/forgot-password' || path === '/forgot-password/') {
+              return <ForgotPasswordPage />;
+      }
+
+      if (path === '/reset-password' || path === '/reset-password/') {
+              return <ResetPasswordPage />;
       }
 
       if (path === '/admin' || path === '/admin/') {
