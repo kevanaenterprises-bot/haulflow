@@ -365,14 +365,35 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
     try {
       const data: any = { ...form };
       if (!data.portal_password) delete data.portal_password;
-      if (cdlFile && SUPABASE_URL) {
-        data.cdl_file_url = await uploadFile(cdlFile, `${Date.now()}-${cdlFile.name}`);
+
+      if (driver) {
+        // Edit: PATCH sends only changed fields — that's fine
+        await api.patch(`/api/drivers/${driver.id}`, data);
+      } else {
+        // Create: POST — only send fields the API accepts to avoid SQL column mismatch
+        const createPayload = {
+          name: data.name,
+          phone: data.phone || null,
+          email: data.email || null,
+          license_number: data.license_number || null,
+          license_expiry: data.license_expiry || null,
+          medical_card_expiry: data.medical_card_expiry || null,
+          hire_date: data.hire_date || null,
+          status: 'available',
+        };
+        if (cdlFile && SUPABASE_URL) {
+          createPayload.cdl_file_url = await uploadFile(cdlFile, `${Date.now()}-${cdlFile.name}`);
+        }
+        if (medFile && SUPABASE_URL) {
+          createPayload.medical_card_file_url = await uploadFile(medFile, `${Date.now()}-${medFile.name}`);
+        }
+        const res = await api.post('/api/drivers', createPayload);
+        // Handle portal password separately after driver is created
+        if (data.portal_password && res?.id) {
+          try { await api.post(`/api/drivers/${res.id}/set-password`, { password: data.portal_password }); }
+          catch { /* password set is best-effort */ }
+        }
       }
-      if (medFile && SUPABASE_URL) {
-        data.medical_card_file_url = await uploadFile(medFile, `${Date.now()}-${medFile.name}`);
-      }
-      if (driver) await api.patch(`/api/drivers/${driver.id}`, data);
-      else await api.post('/api/drivers', data);
       onSaved();
     } catch (err: any) { setError(err.message); }
     setLoading(false);
