@@ -1556,3 +1556,4 @@ runMigrations().then(async () => {
     console.log(`[HaulFlow] API server running on port ${PORT}`);
   });
 });
+// deploy trigger
