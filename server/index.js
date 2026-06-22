@@ -15,6 +15,7 @@ import { registerDriverAuthRoutes } from './driver-auth-routes.js';
 const { Pool } = pg;
 
 const app = express();
+app.set('trust proxy', 1); // Required behind Railway proxy for rate limiting
 const PORT = process.env.PORT || 3001;
 
 // ---------------------------------------------------------------------------

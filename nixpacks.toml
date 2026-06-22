@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20"]
 cmds = ["npm install --omit=dev"]
 
 [phases.build]
-cmds = []
+cmds = ["echo build_$(date +%s) > .buildstamp"]
 
 [start]
 cmd = "node server/index.js"
