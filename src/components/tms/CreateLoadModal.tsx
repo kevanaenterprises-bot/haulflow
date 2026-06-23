@@ -138,10 +138,19 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
     setLoading(true);
     try {
       await api.post('/api/loads', {
-        ...form,
+        load_number: form.load_number,
+        customer_id: form.customer_id || null,
+        origin_address: form.origin_address || null,
+        origin_city: form.origin_city || null,
+        origin_state: form.origin_state || null,
+        destination_address: form.dest_address || null,
+        destination_city: form.dest_city || null,
+        destination_state: form.dest_state || null,
+        pickup_date: form.pickup_date || null,
+        delivery_date: form.delivery_date || null,
         rate: form.rate ? parseFloat(form.rate) : null,
         miles: form.miles ? parseInt(form.miles) : null,
-        fuel_surcharge: fuelSurcharge || null,
+        commodity: form.cargo_description || null,
       });
       onCreated();
     } catch (err: any) {

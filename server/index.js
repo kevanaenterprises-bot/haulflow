@@ -710,6 +710,58 @@ app.post('/api/auth/reset-password', async (req, res) => {
 // ---------------------------------------------------------------------------
 
 // -- Loads --
+
+// Distance estimation (haversine on city centroids — no external API needed)
+const CITY_COORDS = {
+  'AL': { lat: 32.806671, lng: -86.791130 }, 'AK': { lat: 61.370716, lng: -152.404419 },
+  'AZ': { lat: 33.729759, lng: -111.431211 }, 'AR': { lat: 34.969704, lng: -92.373123 },
+  'CA': { lat: 36.778261, lng: -119.417932 }, 'CO': { lat: 39.059811, lng: -105.311104 },
+  'CT': { lat: 41.597782, lng: -72.755371 }, 'DE': { lat: 39.318515, lng: -75.507141 },
+  'FL': { lat: 27.766279, lng: -81.686783 }, 'GA': { lat: 32.157435, lng: -82.907123 },
+  'HI': { lat: 21.094718, lng: -157.498337 }, 'ID': { lat: 44.068203, lng: -114.742043 },
+  'IL': { lat: 40.633125, lng: -89.398528 }, 'IN': { lat: 39.766914, lng: -86.149936 },
+  'IA': { lat: 41.878003, lng: -93.097770 }, 'KS': { lat: 38.526600, lng: -96.726486 },
+  'KY': { lat: 37.090240, lng: -85.602432 }, 'LA': { lat: 31.169546, lng: -91.867805 },
+  'ME': { lat: 44.693947, lng: -69.381944 }, 'MD': { lat: 39.063946, lng: -76.802101 },
+  'MA': { lat: 42.230171, lng: -71.530106 }, 'MI': { lat: 43.326618, lng: -84.249607 },
+  'MN': { lat: 46.729553, lng: -94.685700 }, 'MS': { lat: 32.741646, lng: -89.678696 },
+  'MO': { lat: 38.456100, lng: -92.201820 }, 'MT': { lat: 46.879682, lng: -110.362566 },
+  'NE': { lat: 41.125496, lng: -98.268082 }, 'NV': { lat: 38.802610, lng: -116.414387 },
+  'NH': { lat: 42.930061, lng: -71.463557 }, 'NJ': { lat: 39.833851, lng: -74.871826 },
+  'NM': { lat: 34.425974, lng: -107.757780 }, 'NY': { lat: 40.712784, lng: -74.005941 },
+  'NC': { lat: 35.630066, lng: -79.806419 }, 'ND': { lat: 47.528936, lng: -99.784040 },
+  'OH': { lat: 40.417287, lng: -82.907123 }, 'OK': { lat: 35.007752, lng: -95.992575 },
+  'OR': { lat: 43.804133, lng: -120.554201 }, 'PA': { lat: 40.590752, lng: -77.209755 },
+  'RI': { lat: 41.147234, lng: -71.544660 }, 'SC': { lat: 33.856892, lng: -80.945007 },
+  'SD': { lat: 43.969814, lng: -99.901813 }, 'TN': { lat: 35.860119, lng: -86.460649 },
+  'TX': { lat: 31.054487, lng: -97.563461 }, 'UT': { lat: 39.320980, lng: -111.093731 },
+  'VT': { lat: 44.045868, lng: -72.710356 }, 'VA': { lat: 37.540727, lng: -78.457889 },
+  'WA': { lat: 47.400902, lng: -121.490494 }, 'WV': { lat: 38.491233, lng: -80.954453 },
+  'WI': { lat: 44.512483, lng: -89.764528 }, 'WY': { lat: 42.755966, lng: -107.302490 },
+};
+
+function haversineMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+app.post('/api/distance', authMiddleware, (req, res) => {
+  try {
+    const { origin, dest } = req.body;
+    const oc = CITY_COORDS[(origin?.state || '').toUpperCase()];
+    const dc = CITY_COORDS[(dest?.state || '').toUpperCase()];
+    if (!oc || !dc) return res.status(400).json({ error: 'State not recognized' });
+    const miles = haversineMiles(oc.lat, oc.lng, dc.lat, dc.lng);
+    res.json({ miles });
+  } catch (err) {
+    res.status(500).json({ error: 'Distance calculation failed', details: err.message });
+  }
+});
+
+// -- Loads --
 app.get('/api/loads', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
@@ -735,15 +787,16 @@ app.post('/api/loads', authMiddleware, async (req, res) => {
         company_id, load_number, shipper_id, customer_id, driver_id,
         origin_address, origin_city, origin_state, origin_zip,
         destination_address, destination_city, destination_state, destination_zip,
-        pickup_date, delivery_date, rate, status, notes, weight, commodity
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        pickup_date, delivery_date, rate, status, notes, weight, commodity, miles
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
       RETURNING *`,
       [
         req.user.company_id, b.load_number, b.shipper_id || null, b.customer_id || null,
-        b.driver_id || null, b.origin_address, b.origin_city, b.origin_state, b.origin_zip,
-        b.destination_address, b.destination_city, b.destination_state, b.destination_zip,
+        b.driver_id || null,
+        b.origin_address || null, b.origin_city || null, b.origin_state || null, b.origin_zip || null,
+        b.destination_address || null, b.destination_city || null, b.destination_state || null, b.destination_zip || null,
         b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'booked',
-        b.notes || null, b.weight || null, b.commodity || null,
+        b.notes || null, b.weight || null, b.commodity || null, b.miles || null,
       ]
     );
     res.status(201).json(result.rows[0]);
