@@ -805,7 +805,7 @@ app.post('/api/drivers', authMiddleware, async (req, res) => {
     const b = req.body;
     const result = await pool.query(
       `INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, medical_card_expiry, hire_date, status, termination_date, cdl_file_url, medical_card_file_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [req.user.company_id, b.name, b.phone || null, b.email || null, b.license_number || null, b.license_expiry || null, b.medical_card_expiry || null, b.hire_date || null, b.status || 'available', b.termination_date || null, b.cdl_file_url || null, b.medical_card_file_url || null]
     );
 
