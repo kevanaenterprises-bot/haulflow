@@ -372,6 +372,7 @@ export default function ComparePage() {
             <a href="/" className="hover:text-white transition-colors">Back to HaulFlow</a>
             <a href="/what-is-haulflow" className="hover:text-white transition-colors">What Is HaulFlow?</a>
             <a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a>
+            <a href="https://haulflow.turtlelogisticsllc.com/terms.html" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Terms of Service</a>
           </div>
           <p className="text-xs text-gray-600">© {new Date().getFullYear()} Turtle Logistics LLC. All rights reserved.</p>
         </div>

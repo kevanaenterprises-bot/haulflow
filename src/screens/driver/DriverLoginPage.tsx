@@ -80,6 +80,11 @@ export default function DriverLoginPage({ onLogin }: Props) {
                                 </button>
                       </form>
               </div>
+              <p className="text-center text-xs text-white/50 mt-6">
+                <a href="https://haulflow.turtlelogisticsllc.com/privacy.html" target="_blank" rel="noopener noreferrer" className="hover:text-white/70 transition">Privacy Policy</a>
+                <span className="mx-2">·</span>
+                <a href="https://haulflow.turtlelogisticsllc.com/terms.html" target="_blank" rel="noopener noreferrer" className="hover:text-white/70 transition">Terms of Service</a>
+              </p>
         </div>
       );
 }

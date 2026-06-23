@@ -542,6 +542,13 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
                             <ClipboardList className="w-5 h-5" />
                             Inspection
                   </button>
+          <div className="flex-1 flex items-center justify-center py-3">
+            <span className="text-[10px] text-gray-600">
+              <a href="https://haulflow.turtlelogisticsllc.com/privacy.html" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-300 transition">Privacy</a>
+              <span className="mx-1 text-gray-700">·</span>
+              <a href="https://haulflow.turtlelogisticsllc.com/terms.html" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-300 transition">Terms</a>
+            </span>
+          </div>
         </div>
       )}
 

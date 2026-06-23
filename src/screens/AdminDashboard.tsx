@@ -616,7 +616,12 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        <p className="text-center text-xs text-gray-700 mt-8">HaulFlow Admin Portal · Turtle Logistics LLC</p>
+        <p className="text-center text-xs text-gray-700 mt-8">HaulFlow Admin Portal · Turtle Logistics LLC
+          <span className="mx-2">·</span>
+          <a href="https://haulflow.turtlelogisticsllc.com/privacy.html" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-700 transition">Privacy Policy</a>
+          <span className="mx-2">·</span>
+          <a href="https://haulflow.turtlelogisticsllc.com/terms.html" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-700 transition">Terms of Service</a>
+        </p>
       </div>
     </div>
   );

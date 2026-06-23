@@ -286,6 +286,11 @@ export default function SubscribePage() {
           <p className="text-xs text-gray-600">
             © {new Date().getFullYear()} Turtle Logistics LLC. Built by carriers, for carriers.
           </p>
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <a href="https://haulflow.turtlelogisticsllc.com/privacy.html" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300 transition">Privacy Policy</a>
+            <span className="text-gray-700">·</span>
+            <a href="https://haulflow.turtlelogisticsllc.com/terms.html" target="_blank" rel="noopener noreferrer" className="hover:text-gray-300 transition">Terms of Service</a>
+          </div>
         </div>
       </footer>
     </div>
