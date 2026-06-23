@@ -60,7 +60,8 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
         setMilesError('');
       }
     } catch (e: any) {
-      setMilesError(e.message || 'Could not calculate miles');
+      // Silently skip if states aren't recognized — user may still be typing
+      setMilesError('');
     } finally {
       setCalculatingMiles(false);
     }
