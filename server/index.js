@@ -712,6 +712,29 @@ app.post('/api/auth/reset-password', async (req, res) => {
 // -- Loads --
 
 // Distance estimation (haversine on city centroids — no external API needed)
+const STATE_ABBR = {
+  'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+  'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+  'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+  'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+  'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+  'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+  'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK',
+  'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+  'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV',
+  'wisconsin': 'WI', 'wyoming': 'WY',
+  'district of columbia': 'DC', 'puerto rico': 'PR',
+};
+function normalizeState(s) {
+  if (!s) return s;
+  const trimmed = s.trim();
+  if (/^[A-Z]{2}$/.test(trimmed)) return trimmed;
+  if (/^[a-z]{2}$/.test(trimmed)) return trimmed.toUpperCase();
+  return STATE_ABBR[trimmed.toLowerCase()] || trimmed;
+}
 const CITY_COORDS = {
   'AL': { lat: 32.806671, lng: -86.791130 }, 'AK': { lat: 61.370716, lng: -152.404419 },
   'AZ': { lat: 33.729759, lng: -111.431211 }, 'AR': { lat: 34.969704, lng: -92.373123 },
@@ -751,8 +774,8 @@ function haversineMiles(lat1, lng1, lat2, lng2) {
 app.post('/api/distance', authMiddleware, (req, res) => {
   try {
     const { origin, dest } = req.body;
-    const oc = CITY_COORDS[(origin?.state || '').toUpperCase()];
-    const dc = CITY_COORDS[(dest?.state || '').toUpperCase()];
+    const oc = CITY_COORDS[normalizeState(origin?.state) || ''];
+    const dc = CITY_COORDS[normalizeState(dest?.state) || ''];
     if (!oc || !dc) return res.status(400).json({ error: 'State not recognized' });
     const miles = haversineMiles(oc.lat, oc.lng, dc.lat, dc.lng);
     res.json({ miles });
@@ -793,8 +816,8 @@ app.post('/api/loads', authMiddleware, async (req, res) => {
       [
         req.user.company_id, b.load_number, b.shipper_id || null, b.customer_id || null,
         b.driver_id || null,
-        b.origin_address || null, b.origin_city || null, b.origin_state || null, b.origin_zip || null,
-        b.destination_address || null, b.destination_city || null, b.destination_state || null, b.destination_zip || null,
+        b.origin_address || null, b.origin_city || null, normalizeState(b.origin_state) || null, b.origin_zip || null,
+        b.destination_address || null, b.destination_city || null, normalizeState(b.destination_state) || null, b.destination_zip || null,
         b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'booked',
         b.notes || null, b.weight || null, b.commodity || null, b.miles || null,
       ]
@@ -817,8 +840,8 @@ app.put('/api/loads/:id', authMiddleware, async (req, res) => {
        WHERE id=$20 AND company_id=$21 RETURNING *`,
       [
         b.load_number, b.shipper_id || null, b.customer_id || null, b.driver_id || null,
-        b.origin_address, b.origin_city, b.origin_state, b.origin_zip,
-        b.destination_address, b.destination_city, b.destination_state, b.destination_zip,
+        b.origin_address, b.origin_city, normalizeState(b.origin_state), b.origin_zip,
+        b.destination_address, b.destination_city, normalizeState(b.destination_state), b.destination_zip,
         b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'booked',
         b.notes || null, b.weight || null, b.commodity || null,
         req.params.id, req.user.company_id,
@@ -934,7 +957,7 @@ app.post('/api/customers', authMiddleware, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO customers (company_id, company_name, contact_name, contact_phone, email, address, city, state)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [req.user.company_id, b.name || b.company_name, b.contact_name, b.phone || b.contact_phone, b.email, b.billing_address || b.address, b.city, b.state]
+      [req.user.company_id, b.name || b.company_name, b.contact_name, b.phone || b.contact_phone, b.email, b.billing_address || b.address, b.city, normalizeState(b.state)]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -961,7 +984,7 @@ app.post('/api/shippers', authMiddleware, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO shippers (company_id, type, name, address, city, state, zip, contact_name, contact_phone, contact_email)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.user.company_id, b.type || 'shipper', b.name, b.address, b.city, b.state, b.zip, b.contact_name, b.contact_phone || b.phone || null, b.contact_email || b.email || null]
+      [req.user.company_id, b.type || 'shipper', b.name, b.address, b.city, normalizeState(b.state), b.zip, b.contact_name, b.contact_phone || b.phone || null, b.contact_email || b.email || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
