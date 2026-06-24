@@ -93,26 +93,25 @@ function buildResponseTwiML(speechText, isEnd = false) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  twiml.pause({ length: 1 }); // Brief pause before speaking = more natural
-  twiml.say({ voice: KRISTY_VOICE }, speechText);
-
   if (isEnd) {
     twiml.say({ voice: KRISTY_VOICE }, 'Thanks for calling HaulFlow. Have a great day!');
     twiml.hangup();
   } else {
-    // Loop: listen again
+    // Put <Say> INSIDE <Gather> so Twilio listens while Kristy talks
     const gather = twiml.gather({
       input: 'speech',
       action: '/api/twilio/voice',
       method: 'POST',
-      speechTimeout: '5',
+      speechTimeout: 'auto',       // Twilio detects end of speech automatically
       speechModel: 'phone_call',
       enhanced: true,
-      maxSpeechTimeout: 15,
+      maxSpeechTimeout: 25,
       profanityFilter: false,
-      timeout: 10, // Wait up to 10s of silence before giving up
+      timeout: 25,                 // 25 seconds of silence before redirect (not hang up)
     });
-    // Don't say "what else" — just listen silently for next input
+    gather.say({ voice: KRISTY_VOICE }, speechText);
+    // If gather times out with no speech, redirect back (keep conversation alive)
+    gather.redirect('/api/twilio/voice');
   }
 
   return twiml.toString();
@@ -122,28 +121,27 @@ function buildInitialTwiML() {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  twiml.pause({ length: 1 });
-  twiml.say({ voice: KRISTY_VOICE }, "Hi! I'm Kristy with HaulFlow.");
-  twiml.pause({ length: 1 });
-  twiml.say({ voice: KRISTY_VOICE }, "I can tell you about our trucking management software, pricing, or anything else you'd like to know.");
-  twiml.pause({ length: 1 });
-  twiml.say({ voice: KRISTY_VOICE }, "How can I help you today?");
-
-  // Listen for response
+  // Put ALL speech INSIDE <Gather> so Twilio listens from the start
   const gather = twiml.gather({
     input: 'speech',
     action: '/api/twilio/voice',
     method: 'POST',
-    speechTimeout: '4',
+    speechTimeout: 'auto',
     speechModel: 'phone_call',
     enhanced: true,
-    maxSpeechTimeout: 15,
+    maxSpeechTimeout: 25,
     profanityFilter: false,
-    timeout: 10,
+    timeout: 25,
   });
 
-  // If gather times out with no speech, loop back to greeting
-  const redirect = gather.redirect('/api/twilio/voice');
+  gather.say({ voice: KRISTY_VOICE }, "Hi! I'm Kristy with HaulFlow.");
+  gather.pause({ length: 1 });
+  gather.say({ voice: KRISTY_VOICE }, "I can tell you about our trucking management software, pricing, or anything else you'd like to know.");
+  gather.pause({ length: 1 });
+  gather.say({ voice: KRISTY_VOICE }, "How can I help you today?");
+
+  // If gather times out with no speech, redirect back to greeting (keep alive)
+  gather.redirect('/api/twilio/voice');
 
   return twiml.toString();
 }
@@ -253,14 +251,15 @@ async function handleVoiceWebhook(req, res) {
       input: 'speech',
       action: '/api/twilio/voice',
       method: 'POST',
-      speechTimeout: '4',
+      speechTimeout: 'auto',
       speechModel: 'phone_call',
       enhanced: true,
-      maxSpeechTimeout: 15,
+      maxSpeechTimeout: 25,
       profanityFilter: false,
-      timeout: 10,
+      timeout: 25,
     });
     gather.say({ voice: KRISTY_VOICE }, "Sorry about that. What can I help you with?");
+    gather.redirect('/api/twilio/voice');
     res.type('text/xml');
     return res.send(twiml.toString());
   }
