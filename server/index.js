@@ -1630,12 +1630,12 @@ runMigrations().then(async () => {
     console.log('[SETUP] Demo account password reset (if needed)');
   } catch {}
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[HaulFlow] API server running on port ${PORT}`);
-  });
+  const server = app.listen(PORT, '0.0.0.0');
 
-  // Register Twilio Conversational Voice (Kristy) — WebSocket + webhook
+  // Register Twilio Conversational Voice (Kristy) — must be before listen callback
   registerTwilioVoiceRoutes(app, server);
+
+  console.log(`[HaulFlow] API server running on port ${PORT}`);
 });
 // deploy trigger
 // v2 deploy trigger Mon Jun 22 23:08:23 UTC 2026

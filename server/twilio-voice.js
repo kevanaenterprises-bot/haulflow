@@ -566,17 +566,11 @@ export function registerTwilioVoiceRoutes(app, httpServer) {
   // HTTP endpoint for Twilio voice webhook
   app.post('/api/twilio/voice', handleVoiceWebhook);
 
-  // WebSocket for Media Stream
-  const wss = new WebSocketServer({ noServer: true, clientTracking: false });
-
-  httpServer.on('upgrade', (req, socket, head) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    if (url.pathname === '/api/twilio/voice/stream') {
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit('connection', ws, req);
-      });
-    }
-    // Let other upgrade paths fall through silently
+  // WebSocket for Media Stream — attach directly to HTTP server with path matching
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: '/api/twilio/voice/stream',
+    clientTracking: false,
   });
 
   wss.on('connection', handleConnection);
