@@ -1,8 +1,8 @@
 // server/twilio-voice.js
 // Conversational Kristy — Twilio Voice AI
 //
-// Uses <Record> + Whisper STT instead of Twilio's broken <Gather> speech recognition.
-// Flow: <Say> → <Record> → caller speaks → recording URL → Whisper → GPT → <Say> → loop
+// Uses <Record> + Whisper STT (Twilio's <Gather> speech recognition doesn't work reliably).
+// Flow: <Say> → <Pause> → <Record> → caller speaks → recording URL → Whisper → GPT → <Say> → loop
 
 import twilio from 'twilio';
 
@@ -12,7 +12,8 @@ import twilio from 'twilio';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY || '';
 const VOICE = 'Polly.Joanna';
-const MAX_TURNS = 15;
+const MAX_TURNS = 12;
+const RECORD_TIMEOUT = 5;  // seconds of silence before ending recording
 
 // ---------------------------------------------------------------------------
 // Kristy's brain
@@ -83,7 +84,6 @@ async function kristyThink(userText) {
 async function transcribeRecording(recordingUrl) {
   console.log('[kristy-voice] Downloading recording:', recordingUrl);
 
-  // Download recording from Twilio
   const recResp = await fetch(recordingUrl);
   if (!recResp.ok) {
     console.error('[kristy-voice] Recording download failed:', recResp.status);
@@ -98,7 +98,6 @@ async function transcribeRecording(recordingUrl) {
     return '';
   }
 
-  // Send to Whisper
   const formData = new FormData();
   formData.append('file', new Blob([audioBuf], { type: 'audio/wav' }), 'recording.wav');
   formData.append('model', 'whisper-1');
@@ -132,27 +131,34 @@ function isGoodbye(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: build TwiML with Say + Record
+// Build TwiML: Say → short pause → Record
 // ---------------------------------------------------------------------------
 
-function buildTwiML(sayText, actionUrl, recordingParams = {}) {
+function buildTwiML(sayText, actionUrl, isFirstCall = false) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
   twiml.say({ voice: VOICE }, sayText);
+  twiml.pause({ length: 1 });  // brief beat after speaking
 
+  // On first call, add a clear prompt so caller knows to speak
+  if (isFirstCall) {
+    twiml.say({ voice: VOICE }, "Go ahead and speak anytime, or press the pound key when you're done.");
+    twiml.pause({ length: 1 });
+  }
+
+  // Record — caller speaks, then Twilio POSTs recording URL back to us
   twiml.record({
     action: actionUrl,
     method: 'POST',
     maxLength: 30,
-    timeout: 8,           // silence timeout before ending recording
-    finishOnKey: '#',     // press # to submit early
-    transcribe: false,    // we use Whisper, not Twilio's transcription
+    timeout: RECORD_TIMEOUT,
+    finishOnKey: '#',
+    transcribe: false,
     playBeep: true,
-    ...recordingParams,
   });
 
-  // Fallback: if recording fails or times out with no speech
+  // If recording returns empty, redirect to retry
   twiml.redirect(actionUrl);
 
   return twiml.toString();
@@ -168,9 +174,8 @@ async function handleVoiceWebhook(req, res) {
     const turnCount = parseInt(req.query.turn || '0', 10) + 1;
     const RecordingUrl = req.body.RecordingUrl || '';
     const RecordingDuration = req.body.RecordingDuration || '0';
-    const CallSid = req.body.CallSid || 'unknown';
 
-    console.log(`[kristy-voice] Turn:${turnCount} RecordingUrl:${RecordingUrl ? 'yes' : 'no'} Duration:${RecordingDuration}s`);
+    console.log(`[kristy-voice] Turn:${turnCount} Recording:${RecordingUrl ? 'yes (' + RecordingDuration + 's)' : 'no'}`);
 
     // --- Max turns safety ---
     if (turnCount > MAX_TURNS) {
@@ -182,12 +187,13 @@ async function handleVoiceWebhook(req, res) {
     }
 
     // --- First call: greeting ---
-    if (turnCount === 1) {
+    if (turnCount === 1 && !RecordingUrl) {
       const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
       res.type('text/xml');
       return res.send(buildTwiML(
         "Hi, I'm Kristy with HaulFlow. How can I help you today?",
-        actionUrl
+        actionUrl,
+        true  // isFirstCall — adds "go ahead and speak" prompt
       ));
     }
 
@@ -195,11 +201,9 @@ async function handleVoiceWebhook(req, res) {
     let sayText;
 
     if (RecordingUrl && parseInt(RecordingDuration) > 1) {
-      // We have a recording with actual audio — transcribe with Whisper
       const transcript = await transcribeRecording(RecordingUrl);
 
       if (transcript && transcript.length > 1) {
-        // Kristy thinks
         const reply = await kristyThink(transcript);
 
         if (isGoodbye(reply)) {
@@ -212,11 +216,10 @@ async function handleVoiceWebhook(req, res) {
 
         sayText = reply;
       } else {
-        sayText = "I didn't catch that. Could you try again?";
+        sayText = "I didn't quite catch that. Go ahead and try again.";
       }
     } else {
-      // No recording or too short — retry prompt
-      sayText = "I didn't hear anything that time. Go ahead and speak, or press the pound key when you're done.";
+      sayText = "I didn't hear anything that time. Go ahead and speak, or press pound when you're done.";
     }
 
     const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
