@@ -14,7 +14,7 @@ import twilio from 'twilio';
 // Constants
 // ---------------------------------------------------------------------------
 
-const KRISTY_VOICE = 'alice';
+const KRISTY_VOICE = 'Polly.Joanna'; // Amazon Polly voice, clearer than 'alice'
 
 const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable team member for HaulFlow — a modern Transportation Management System (TMS) for trucking and freight companies.
 
@@ -45,7 +45,7 @@ Voice guidelines:
 async function kristyThink(userText, conversationHistory) {
   const openaiKey = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY;
   if (!openaiKey) {
-    console.error('[kristy-voice] OPENAI_API_KEY not set');
+    console.error('[kristy-voice] No OpenAI key found (checked OPENAI_API_KEY and OPEN_API_KEY)');
     return "I'm excited to tell you more about HaulFlow! Visit go4fc dot com to learn about our trucking management software, or call back later when our team is available.";
   }
 
@@ -68,7 +68,7 @@ async function kristyThink(userText, conversationHistory) {
         max_tokens: 150,
         temperature: 0.7,
       }),
-      signal: AbortSignal.timeout(10000), // 10s timeout
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!resp.ok) {
@@ -105,12 +105,12 @@ function getGatherOpts() {
     input: 'speech dtmf',
     action: baseUrl ? `${baseUrl}/api/twilio/voice` : '/api/twilio/voice',
     method: 'POST',
-    speechTimeout: '3',
+    speechTimeout: '5',
     speechModel: 'phone_call',
     enhanced: true,
     numResults: 1,
     profanityFilter: false,
-    timeout: 10,
+    timeout: 15,
   };
 }
 
@@ -122,12 +122,10 @@ function buildResponseTwiML(speechText, isEnd = false) {
     twiml.say({ voice: KRISTY_VOICE }, 'Thanks for calling HaulFlow. Have a great day!');
     twiml.hangup();
   } else {
-    // <Say> first, then <Gather> — more reliable for speech detection
     twiml.say({ voice: KRISTY_VOICE }, speechText);
     twiml.pause({ length: 1 });
     const gather = twiml.gather(getGatherOpts());
     gather.say({ voice: KRISTY_VOICE }, 'What else can I help you with?');
-    // Timeout redirect — keeps conversation alive
     gather.redirect('/api/twilio/voice');
   }
 
@@ -138,13 +136,11 @@ function buildInitialTwiML() {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  // Intro outside of gather so it plays cleanly
   twiml.say({ voice: KRISTY_VOICE }, "Hi! I'm Kristy with HaulFlow.");
   twiml.pause({ length: 1 });
   twiml.say({ voice: KRISTY_VOICE }, "I can tell you about our trucking management software, pricing, or anything else you'd like to know.");
   twiml.pause({ length: 1 });
 
-  // Now gather for their response
   const gather = twiml.gather(getGatherOpts());
   gather.say({ voice: KRISTY_VOICE }, "How can I help you today?");
   gather.redirect('/api/twilio/voice');
@@ -184,7 +180,6 @@ async function handleVoiceWebhook(req, res) {
         responseText = reply;
         shouldEnd = isGoodbye(speechResult);
         if (shouldEnd) {
-          // Let GPT say goodbye naturally, then end
           const finalGreeting = await kristyThink(`The caller said "${speechResult}". Say a warm goodbye as Kristy from HaulFlow. Keep it to one sentence.`, history);
           responseText = finalGreeting || "Thanks for calling HaulFlow. Have a great day!";
         }
@@ -230,7 +225,6 @@ async function handleVoiceWebhook(req, res) {
     return res.send(twiml);
   } catch (err) {
     console.error('[kristy-voice] Webhook error:', err);
-    // Don't hang up — keep conversation alive
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     twiml.say({ voice: KRISTY_VOICE }, "Sorry about that. Let me try again.");
@@ -275,10 +269,10 @@ async function handleSmsWebhook(req, res) {
 }
 
 // ---------------------------------------------------------------------------
-// Export
+// Export — no httpServer needed, just Express app
 // ---------------------------------------------------------------------------
 
-export function registerTwilioVoiceRoutes(app, httpServer) {
+export function registerTwilioVoiceRoutes(app, _httpServer) {
   console.log('[kristy-voice] Registering Twilio Conversational Voice routes...');
 
   app.post('/api/twilio/voice', handleVoiceWebhook);
