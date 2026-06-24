@@ -1,6 +1,6 @@
 // server/twilio-voice.js
 // Conversational Kristy — Twilio Voice AI
-// Pattern from Twilio support: <Gather><Say/></Gather> — Say INSIDE Gather
+// Pattern: <Gather><Say/></Gather> with full diagnostic logging
 
 import twilio from 'twilio';
 
@@ -54,14 +54,23 @@ function isGoodbye(text) {
 }
 
 async function handleVoiceWebhook(req, res) {
+  // LOG FULL TWILIO REQUEST for diagnostics
+  console.log(`[kristy-voice] ===== FULL REQUEST BODY =====`);
+  console.log(JSON.stringify(req.body, null, 2));
+  console.log(`[kristy-voice] ===== QUERY: ${JSON.stringify(req.query)} =====`);
+
   try {
     const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
     const SpeechResult = (req.body.SpeechResult || '').trim();
+    const SpeechConfidence = req.body.SpeechConfidence;
     const Digits = (req.body.Digits || '').trim();
+    const CallSid = req.body.CallSid || 'unknown';
+    const Caller = req.body.From || 'unknown';
     const turn = parseInt(req.query.turn || '0', 10) + 1;
     const retry = parseInt(req.query.retry || '0', 10);
 
-    console.log(`[kristy-voice] Turn:${turn} Retry:${retry} Speech:"${SpeechResult}" Digits:"${Digits}"`);
+    console.log(`[kristy-voice] Call:${CallSid} Caller:${Caller} Turn:${turn} Retry:${retry}`);
+    console.log(`[kristy-voice] SpeechResult:"${SpeechResult}" Confidence:${SpeechConfidence} Digits:"${Digits}"`);
 
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
@@ -76,10 +85,8 @@ async function handleVoiceWebhook(req, res) {
     let sayText;
 
     if (!SpeechResult && !Digits && turn <= 1) {
-      // First call — greeting
       sayText = "Hi, I'm Kristy with HaulFlow. How can I help you today?";
     } else if (!SpeechResult && !Digits) {
-      // No speech detected
       if (retry >= 3) {
         twiml.say({ voice: VOICE }, "I'm having trouble hearing you. Feel free to call back anytime. Thanks for calling HaulFlow!");
         twiml.hangup();
@@ -88,7 +95,6 @@ async function handleVoiceWebhook(req, res) {
       }
       sayText = "I didn't quite catch that. Could you repeat what you said?";
     } else {
-      // Caller spoke — Kristy thinks
       const userInput = SpeechResult || `they pressed ${Digits}`;
       const reply = await kristyThink(userInput, []);
 
@@ -102,25 +108,31 @@ async function handleVoiceWebhook(req, res) {
       sayText = reply;
     }
 
-    // KEY FIX: <Say> nested INSIDE <Gather> — this is how Twilio STT works
-    // The speech recognizer activates with Gather, ignores the Say output, then captures caller
+    // <Gather> with speech recognition, <Say> nested inside
     const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turn}&retry=${retry}`;
     const gather = twiml.gather({
-      input: 'speech dtmf',
+      input: 'speech',
       action: actionUrl,
       method: 'POST',
       timeout: '10',
       speechTimeout: 'auto',
       maxSpeechTime: '30',
+      language: 'en-US',
+      hints: 'HaulFlow,pricing,features,demo,trucking,freight,dispatch,load,driver,DVIR,billing,tracking',
     });
     gather.say({ voice: VOICE }, sayText);
 
-    // If gather times out with no input — retry
+    // Fallback if gather times out
     twiml.say({ voice: VOICE }, "I'm not picking anything up, so I'll let you go. Feel free to call back anytime.");
     twiml.hangup();
 
+    const twimlOutput = twiml.toString();
+    console.log(`[kristy-voice] ===== TWIML RESPONSE =====`);
+    console.log(twimlOutput);
+    console.log(`[kristy-voice] ===== END =====`);
+
     res.type('text/xml');
-    res.send(twiml.toString());
+    res.send(twimlOutput);
 
   } catch (err) {
     console.error('[kristy-voice] Error:', err);
