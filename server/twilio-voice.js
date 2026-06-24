@@ -2,8 +2,9 @@
 // Conversational Kristy — Twilio Voice AI (HTTP callback approach)
 //
 // Architecture:
-//   Caller → Twilio → POST /api/twilio/voice → TwiML (<Say> then <Gather>)
-//   Caller speaks → Twilio STT → POST /api/twilio/voice with SpeechResult → GPT → <Say> reply → loop
+//   Caller → Twilio → POST /api/twilio/voice → TwiML (<Gather> with nested <Say>)
+//   Kristy speaks INSIDE the <Gather> so Twilio listens simultaneously
+//   Caller speaks → Twilio STT → POST to action URL → GPT brain → <Say> reply → loop
 
 import twilio from 'twilio';
 
@@ -13,7 +14,7 @@ import twilio from 'twilio';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY || '';
 const VOICE = 'Polly.Joanna';
-const MAX_TURNS = 10;
+const MAX_TURNS = 12;
 
 // ---------------------------------------------------------------------------
 // Kristy's brain
@@ -39,7 +40,7 @@ Voice guidelines:
 - Use contractions naturally (you'll, we're, it's)
 - Never say "As an AI" or "I'm an AI assistant" — you ARE Kristy, a real team member
 - Sound warm and helpful, like a knowledgeable colleague
-- If someone says goodbye or thanks, respond naturally and say something brief. Do NOT tell them to hang up or that the call is ending.`;
+- If someone says goodbye or thanks, respond naturally and say something brief. Do NOT tell them to hang up.`;
 
 // ---------------------------------------------------------------------------
 // GPT call
@@ -82,57 +83,46 @@ async function kristyThink(userText, history) {
 }
 
 // ---------------------------------------------------------------------------
-// Build a complete conversational TwiML turn
+// Build TwiML — Say is INSIDE Gather so Twilio listens while Kristy speaks
 // ---------------------------------------------------------------------------
 
 function buildTwiML(baseUrl, sayText, turnCount, history) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  // Step 1: Kristy speaks her response
-  twiml.say({ voice: VOICE }, sayText);
+  const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
 
-  // Step 2: Pause briefly so she stops talking before listening starts
-  twiml.pause({ length: 1 });
-
-  // Step 3: Listen for caller's response
-  const historyParam = history.length > 0
-    ? `&history=${encodeURIComponent(JSON.stringify(history.slice(-20)))}`
-    : '';
-  const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}${historyParam}`;
-
-  // First gather — give them 6 seconds to start speaking, 4 seconds of silence to know they're done
+  // KEY FIX: <Say> is nested INSIDE <Gather>
+  // This means Twilio listens for speech WHILE Kristy talks
+  // Caller can interrupt (barge-in) or speak after she finishes
   const gather = twiml.gather({
-    input: 'speech dtmf',
+    input: 'speech',
     action: actionUrl,
     method: 'POST',
-    timeout: 10,
-    speechTimeout: 'auto',
+    timeout: 12,           // wait up to 12s for caller to start speaking
+    speechTimeout: 'auto', // let Twilio auto-detect end of speech
     maxSpeechTime: 30,
     speechModel: 'phone_call',
-    enhanced: true,
     language: 'en-US',
   });
-  // Silent prompt — just listening, no nested <Say> to avoid transcribing Kristy's voice
-  gather.pause({ length: 1 });
+  gather.say({ voice: VOICE }, sayText);
 
-  // If first gather times out (no speech at all), try again with a prompt
-  const retryUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}${historyParam}`;
+  // Fallback: if Gather times out with no speech at all
+  const fallbackUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}&retry=1`;
   const gather2 = twiml.gather({
-    input: 'speech dtmf',
-    action: retryUrl,
+    input: 'speech',
+    action: fallbackUrl,
     method: 'POST',
     timeout: 12,
     speechTimeout: 'auto',
     maxSpeechTime: 30,
     speechModel: 'phone_call',
-    enhanced: true,
     language: 'en-US',
   });
-  gather2.say({ voice: VOICE }, "I didn't quite catch that. Could you repeat what you said?");
+  gather2.say({ voice: VOICE }, "I didn't quite catch that. What can I help you with?");
 
-  // If still nothing — say goodbye gracefully
-  twiml.say({ voice: VOICE }, "I'm not picking anything up, so I'll let you go. Feel free to call back anytime. Thanks for calling HaulFlow!");
+  // If still nothing — goodbye
+  twiml.say({ voice: VOICE }, "I'm not picking anything up right now. Feel free to call back anytime. Thanks for calling HaulFlow!");
   twiml.hangup();
 
   return twiml.toString();
@@ -147,15 +137,9 @@ async function handleVoiceWebhook(req, res) {
     const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
     const SpeechResult = (req.body.SpeechResult || '').trim();
     const turnCount = parseInt(req.query.turn || '0', 10) + 1;
+    const isRetry = req.query.retry === '1';
 
-    console.log(`[kristy-voice] Webhook hit. Turn: ${turnCount}. Speech: "${SpeechResult}"`);
-
-    // Parse persisted history from URL params
-    let history = [];
-    try {
-      const h = req.query.history || '';
-      if (h) history = JSON.parse(decodeURIComponent(h));
-    } catch {}
+    console.log(`[kristy-voice] Webhook hit. Turn: ${turnCount}. Retry: ${isRetry}. Speech: "${SpeechResult}"`);
 
     let replyText;
 
@@ -171,10 +155,8 @@ async function handleVoiceWebhook(req, res) {
       res.type('text/xml');
       return res.send(twiml.toString());
     } else {
-      // Caller spoke — think and reply
-      history.push({ role: 'user', content: SpeechResult });
-      replyText = await kristyThink(SpeechResult, history);
-      history.push({ role: 'assistant', content: replyText });
+      // Caller spoke — Kristy thinks and replies
+      replyText = await kristyThink(SpeechResult, []);
 
       // Check for goodbye signals
       const lower = replyText.toLowerCase();
@@ -188,7 +170,7 @@ async function handleVoiceWebhook(req, res) {
       }
     }
 
-    const twiml = buildTwiML(baseUrl, replyText, turnCount, history);
+    const twiml = buildTwiML(baseUrl, replyText, turnCount, []);
     res.type('text/xml');
     res.send(twiml);
 
