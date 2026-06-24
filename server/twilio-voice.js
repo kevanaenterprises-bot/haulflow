@@ -1,8 +1,8 @@
 // server/twilio-voice.js
 // Conversational Kristy — Twilio Voice AI
 //
-// Bypasses Twilio's unreliable STT. Uses <Record> to capture caller audio,
-// transcribes with our own Whisper API, then responds with GPT + <Say>.
+// Uses <Record> + Whisper STT instead of Twilio's broken <Gather> speech recognition.
+// Flow: <Say> → <Record> → caller speaks → recording URL → Whisper → GPT → <Say> → loop
 
 import twilio from 'twilio';
 
@@ -12,7 +12,7 @@ import twilio from 'twilio';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY || '';
 const VOICE = 'Polly.Joanna';
-const MAX_TURNS = 12;
+const MAX_TURNS = 15;
 
 // ---------------------------------------------------------------------------
 // Kristy's brain
@@ -38,16 +38,16 @@ Voice guidelines:
 - Use contractions naturally (you'll, we're, it's)
 - Never say "As an AI" or "I'm an AI assistant" — you ARE Kristy, a real team member
 - Sound warm and helpful, like a knowledgeable colleague
-- If someone says goodbye or thanks, respond naturally. Do NOT tell them to hang up.`;
+- If someone says goodbye or thanks, respond naturally and briefly`;
 
 // ---------------------------------------------------------------------------
-// GPT
+// GPT call
 // ---------------------------------------------------------------------------
 
 async function kristyThink(userText) {
   if (!OPENAI_KEY) {
-    console.error('[kristy-voice] No OpenAI key');
-    return "I'm having a technical issue right now. Please call back later.";
+    console.error('[kristy-voice] No OPENAI_API_KEY');
+    return "I'm sorry, I'm having a technical issue right now. Please call back later.";
   }
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -69,7 +69,7 @@ async function kristyThink(userText) {
 
   if (!resp.ok) {
     console.error('[kristy-voice] GPT error:', resp.status);
-    return "I'm having trouble right now. Could you try again?";
+    return "I'm having trouble thinking right now. Could you try again?";
   }
 
   const data = await resp.json();
@@ -77,48 +77,49 @@ async function kristyThink(userText) {
 }
 
 // ---------------------------------------------------------------------------
-// Whisper STT (our own — bypasses Twilio STT)
+// Whisper STT — download recording → transcribe
 // ---------------------------------------------------------------------------
 
 async function transcribeRecording(recordingUrl) {
-  if (!OPENAI_KEY) return '';
+  console.log('[kristy-voice] Downloading recording:', recordingUrl);
 
-  console.log(`[kristy-voice] Transcribing: ${recordingUrl}`);
-
-  try {
-    // Download the recording
-    const audioResp = await fetch(recordingUrl);
-    if (!audioResp.ok) {
-      console.error('[kristy-voice] Failed to download recording:', audioResp.status);
-      return '';
-    }
-    const audioBuf = Buffer.from(await audioResp.arrayBuffer());
-
-    // Send to Whisper
-    const fd = new FormData();
-    fd.append('file', new Blob([audioBuf], { type: 'audio/wav' }), 'recording.wav');
-    fd.append('model', 'whisper-1');
-    fd.append('language', 'en');
-    fd.append('response_format', 'text');
-
-    const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
-      body: fd,
-    });
-
-    if (!whisperResp.ok) {
-      console.error('[kristy-voice] Whisper error:', whisperResp.status);
-      return '';
-    }
-
-    const text = (await whisperResp.text()).trim();
-    console.log(`[kristy-voice] Whisper result: "${text}"`);
-    return text;
-  } catch (err) {
-    console.error('[kristy-voice] Transcribe error:', err);
+  // Download recording from Twilio
+  const recResp = await fetch(recordingUrl);
+  if (!recResp.ok) {
+    console.error('[kristy-voice] Recording download failed:', recResp.status);
     return '';
   }
+
+  const audioBuf = Buffer.from(await recResp.arrayBuffer());
+  console.log(`[kristy-voice] Recording downloaded: ${audioBuf.length} bytes`);
+
+  if (audioBuf.length < 1000) {
+    console.log('[kristy-voice] Recording too small, skipping');
+    return '';
+  }
+
+  // Send to Whisper
+  const formData = new FormData();
+  formData.append('file', new Blob([audioBuf], { type: 'audio/wav' }), 'recording.wav');
+  formData.append('model', 'whisper-1');
+  formData.append('language', 'en');
+  formData.append('response_format', 'text');
+
+  const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
+    body: formData,
+  });
+
+  if (!whisperResp.ok) {
+    const err = await whisperResp.text();
+    console.error('[kristy-voice] Whisper error:', whisperResp.status, err.slice(0, 200));
+    return '';
+  }
+
+  const text = (await whisperResp.text()).trim();
+  console.log(`[kristy-voice] Whisper transcript: "${text}"`);
+  return text;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,60 +128,82 @@ async function transcribeRecording(recordingUrl) {
 
 function isGoodbye(text) {
   const lower = text.toLowerCase();
-  return /goodbye|bye\s?bye|hang\s?up|thanks\s?for\s?calling|have\s?a\s?great\s?day|talk\s?to\s?you\s?later|take\s?care/.test(lower);
+  return /goodbye|bye\s?bye|hang\s?up|thanks\s?for\s?calling|have\s?a\s?great|talk\s?later|take\s?care/.test(lower);
 }
 
 // ---------------------------------------------------------------------------
-// Voice webhook
+// Helper: build TwiML with Say + Record
+// ---------------------------------------------------------------------------
+
+function buildTwiML(sayText, actionUrl, recordingParams = {}) {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  twiml.say({ voice: VOICE }, sayText);
+
+  twiml.record({
+    action: actionUrl,
+    method: 'POST',
+    maxLength: 30,
+    timeout: 8,           // silence timeout before ending recording
+    finishOnKey: '#',     // press # to submit early
+    transcribe: false,    // we use Whisper, not Twilio's transcription
+    playBeep: true,
+    ...recordingParams,
+  });
+
+  // Fallback: if recording fails or times out with no speech
+  twiml.redirect(actionUrl);
+
+  return twiml.toString();
+}
+
+// ---------------------------------------------------------------------------
+// Webhook handler
 // ---------------------------------------------------------------------------
 
 async function handleVoiceWebhook(req, res) {
   try {
     const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
-    const turn = parseInt(req.query.turn || '0', 10) + 1;
-    const retry = parseInt(req.query.retry || '0', 10);
+    const turnCount = parseInt(req.query.turn || '0', 10) + 1;
+    const RecordingUrl = req.body.RecordingUrl || '';
+    const RecordingDuration = req.body.RecordingDuration || '0';
+    const CallSid = req.body.CallSid || 'unknown';
 
-    // Log everything Twilio sends us
-    console.log(`[kristy-voice] === Turn:${turn} Retry:${retry} ===`);
-    console.log(`[kristy-voice] Body keys: ${Object.keys(req.body).join(', ')}`);
-    const recordingUrl = req.body.RecordingUrl || '';
-    const recordingDuration = req.body.RecordingDuration || '';
-    console.log(`[kristy-voice] RecordingUrl: ${recordingUrl} Duration: ${recordingDuration}s`);
+    console.log(`[kristy-voice] Turn:${turnCount} RecordingUrl:${RecordingUrl ? 'yes' : 'no'} Duration:${RecordingDuration}s`);
 
-    const VoiceResponse = twilio.twiml.VoiceResponse;
-    const twiml = new VoiceResponse();
-
-    // Safety: max turns
-    if (turn > MAX_TURNS) {
-      twiml.say({ voice: VOICE }, "It's been great talking with you! Call us anytime. Have a wonderful day!");
+    // --- Max turns safety ---
+    if (turnCount > MAX_TURNS) {
+      const twiml = new (twilio.twiml.VoiceResponse)();
+      twiml.say({ voice: VOICE }, "It's been great talking with you! Feel free to call HaulFlow anytime. Have a wonderful day!");
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
     }
 
+    // --- First call: greeting ---
+    if (turnCount === 1) {
+      const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
+      res.type('text/xml');
+      return res.send(buildTwiML(
+        "Hi, I'm Kristy with HaulFlow. How can I help you today?",
+        actionUrl
+      ));
+    }
+
+    // --- Subsequent turns: process recording ---
     let sayText;
 
-    if (turn === 1 && !recordingUrl) {
-      // FIRST call — greeting
-      sayText = "Hi, I'm Kristy with HaulFlow. How can I help you today?";
-    } else if (recordingUrl) {
-      // We have a recording — transcribe with Whisper
-      const transcript = await transcribeRecording(recordingUrl);
+    if (RecordingUrl && parseInt(RecordingDuration) > 1) {
+      // We have a recording with actual audio — transcribe with Whisper
+      const transcript = await transcribeRecording(RecordingUrl);
 
-      if (!transcript || transcript.length < 2) {
-        if (retry >= 2) {
-          twiml.say({ voice: VOICE }, "I'm having trouble hearing you. Feel free to call back anytime. Thanks for calling HaulFlow!");
-          twiml.hangup();
-          res.type('text/xml');
-          return res.send(twiml.toString());
-        }
-        sayText = "I didn't quite catch that. Could you say that again?";
-      } else {
+      if (transcript && transcript.length > 1) {
         // Kristy thinks
         const reply = await kristyThink(transcript);
-        console.log(`[kristy-voice] Kristy reply: "${reply}"`);
 
         if (isGoodbye(reply)) {
+          const twiml = new (twilio.twiml.VoiceResponse)();
           twiml.say({ voice: VOICE }, reply);
           twiml.hangup();
           res.type('text/xml');
@@ -188,39 +211,21 @@ async function handleVoiceWebhook(req, res) {
         }
 
         sayText = reply;
+      } else {
+        sayText = "I didn't catch that. Could you try again?";
       }
     } else {
-      // No recording received (timeout/hangup)
-      twiml.say({ voice: VOICE }, "Thanks for calling HaulFlow! Have a great day.");
-      twiml.hangup();
-      res.type('text/xml');
-      return res.send(twiml.toString());
+      // No recording or too short — retry prompt
+      sayText = "I didn't hear anything that time. Go ahead and speak, or press the pound key when you're done.";
     }
 
-    // Say the response, then record next caller input
-    twiml.say({ voice: VOICE }, sayText);
-
-    // Record caller's response (max 12 seconds, trim silence)
-    // Uses Record + Whisper instead of Gather + Twilio STT (Twilio STT was returning empty)
-    const recordAction = `${baseUrl}/api/twilio/voice?turn=${turn}&retry=${retry}`;
-    twiml.record({
-      action: recordAction,
-      method: 'POST',
-      maxLength: 12,
-      finishOnKey: '',
-      trim: 'trim-silence',
-      transcribe: false,   // We use our own Whisper
-      playBeep: true,       // Beep so caller knows recording started
-      recordingStatusCallback: `${baseUrl}/api/twilio/voice-status?turn=${turn}`,
-    });
-
+    const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
     res.type('text/xml');
-    res.send(twiml.toString());
+    res.send(buildTwiML(sayText, actionUrl));
 
   } catch (err) {
     console.error('[kristy-voice] Webhook error:', err);
-    const VoiceResponse = twilio.twiml.VoiceResponse;
-    const twiml = new VoiceResponse();
+    const twiml = new (twilio.twiml.VoiceResponse)();
     twiml.say({ voice: VOICE }, "I'm sorry, something went wrong. Please try calling back.");
     twiml.hangup();
     res.type('text/xml');
@@ -229,7 +234,7 @@ async function handleVoiceWebhook(req, res) {
 }
 
 // ---------------------------------------------------------------------------
-// SMS webhook
+// SMS handler
 // ---------------------------------------------------------------------------
 
 async function handleSmsWebhook(req, res) {
@@ -237,11 +242,11 @@ async function handleSmsWebhook(req, res) {
     const Body = (req.body.Body || '').trim();
     const From = req.body.From || 'unknown';
     console.log(`[kristy-voice] SMS from ${From}: "${Body}"`);
+
     if (!Body) return res.status(200).send('');
 
     const reply = await kristyThink(Body);
-    const MessagingResponse = twilio.twiml.MessagingResponse;
-    const twiml = new MessagingResponse();
+    const twiml = new (twilio.twiml.MessagingResponse)();
     twiml.message(reply);
     res.type('text/xml');
     res.send(twiml.toString());
@@ -256,13 +261,8 @@ async function handleSmsWebhook(req, res) {
 // ---------------------------------------------------------------------------
 
 export function registerTwilioVoiceRoutes(app) {
-  console.log('[kristy-voice] Registering Twilio Conversational Voice routes (Record + Whisper)...');
+  console.log('[kristy-voice] Registering Twilio Conversational Voice routes...');
   app.post('/api/twilio/voice', handleVoiceWebhook);
   app.post('/api/twilio/sms', handleSmsWebhook);
-  // Recording status callback (fires when recording is ready)
-  app.post('/api/twilio/voice-status', (req, res) => {
-    console.log(`[kristy-voice] Recording status: ${req.body.RecordingStatus} url:${req.body.RecordingUrl} duration:${req.body.RecordingDuration}s`);
-    res.status(200).send('');
-  });
-  console.log('[kristy-voice] ✅ POST /api/twilio/voice + POST /api/twilio/sms + POST /api/twilio/voice-status');
+  console.log('[kristy-voice] ✅ POST /api/twilio/voice (Record+Whisper) + POST /api/twilio/sms');
 }
