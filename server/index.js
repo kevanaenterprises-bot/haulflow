@@ -1634,8 +1634,8 @@ runMigrations().then(async () => {
     console.log(`[HaulFlow] API server running on port ${PORT}`);
   });
 
-  // Register Twilio Conversational Voice (Kristy) — voice + SMS
-  registerTwilioVoiceRoutes(app, server);
+  // Register Twilio Conversational Voice (Kristy)
+  registerTwilioVoiceRoutes(app);
 });
 // deploy trigger
 // v2 deploy trigger Mon Jun 22 23:08:23 UTC 2026
