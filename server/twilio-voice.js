@@ -158,6 +158,8 @@ async function handleVoiceWebhook(req, res) {
       timeout: 10,
       speechTimeout: '3',
       maxSpeechTime: 30,
+      speechModel: 'phone_call',
+      enhanced: true,
     });
 
     // If Gather times out with no input — retry
