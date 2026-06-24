@@ -1,5 +1,5 @@
 // server/twilio-voice.js
-// Conversational Kristy — Twilio Voice AI (HTTP callback approach, no WebSocket)
+// Conversational Kristy — Twilio Voice AI (HTTP callback approach)
 //
 // Architecture:
 //   Caller → Twilio → POST /api/twilio/voice → TwiML (<Gather> + <Say>)
@@ -12,12 +12,12 @@ import twilio from 'twilio';
 // ---------------------------------------------------------------------------
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY || '';
-const KRISTY_VOICE = process.env.TWILIO_VOICE || 'Polly.Joanna'; // Amazon Polly voice
+const KRISTY_VOICE = 'Polly.Joanna'; // Amazon Polly voice (warm, natural)
 const GATHER_TIMEOUT = 5; // seconds of silence before Gather submits
 const MAX_TURNS = 10; // safety limit on conversation turns
 
 // ---------------------------------------------------------------------------
-// Kristy's brain
+// Kristy's brain — same identity as avatar-chat.js, tuned for voice
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable team member for HaulFlow — a modern Transportation Management System (TMS) for trucking and freight companies.
@@ -40,7 +40,7 @@ Voice guidelines:
 - Use contractions naturally (you'll, we're, it's)
 - Never say "As an AI" or "I'm an AI assistant" — you ARE Kristy, a real team member
 - Sound warm and helpful, like a knowledgeable colleague
-- If someone says goodbye or thanks, respond naturally — just say something like "Thanks for calling, have a great day!" and do NOT include any indication that the call should end. The system handles hangup.`;
+- If someone says goodbye or thanks, respond naturally and say something brief. Do NOT tell them to hang up or that the call is ending.`;
 
 // ---------------------------------------------------------------------------
 // GPT call
@@ -48,6 +48,7 @@ Voice guidelines:
 
 async function kristyThink(userText, history) {
   if (!OPENAI_KEY) {
+    console.error('[kristy-voice] No OPENAI_API_KEY set');
     return "I'm sorry, I'm having a technical issue right now. Please call back later.";
   }
 
@@ -72,7 +73,8 @@ async function kristyThink(userText, history) {
   });
 
   if (!resp.ok) {
-    console.error('[kristy-voice] GPT error:', resp.status);
+    const errText = await resp.text().catch(() => '');
+    console.error('[kristy-voice] GPT error:', resp.status, errText.slice(0, 200));
     return "I'm having trouble thinking right now. Could you try again?";
   }
 
@@ -81,26 +83,41 @@ async function kristyThink(userText, history) {
 }
 
 // ---------------------------------------------------------------------------
-// Build TwiML
+// Build TwiML with <Gather>
 // ---------------------------------------------------------------------------
 
-function buildTwiML(sayText, turnCount) {
+function buildGatherTwiML(baseUrl, sayText, turnCount) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
+  // Gather with speech input — action must be FULL URL
   const gather = twiml.gather({
     input: 'speech',
-    action: '/api/twilio/voice',
+    action: `${baseUrl}/api/twilio/voice?turn=${turnCount}`,
     method: 'POST',
     timeout: GATHER_TIMEOUT,
-    speechTimeout: 'auto',
+    speechTimeout: '3', // 3 seconds of silence = end of thought (not 'auto' which is too long)
     maxSpeechTime: 30,
+    numDigits: 1, // allow digit input too
   });
 
+  // Kristy speaks DURING the gather — so she's listening while talking
   gather.say({ voice: KRISTY_VOICE }, sayText);
 
-  // If Gather times out (no speech), say goodbye
-  twiml.say({ voice: KRISTY_VOICE }, "I didn't catch that. Thanks for calling HaulFlow, have a great day!");
+  // If gather times out with no input, try again once
+  const gather2 = twiml.gather({
+    input: 'speech',
+    action: `${baseUrl}/api/twilio/voice?turn=${turnCount}`,
+    method: 'POST',
+    timeout: GATHER_TIMEOUT,
+    speechTimeout: '3',
+    maxSpeechTime: 30,
+    numDigits: 1,
+  });
+  gather2.say({ voice: KRISTY_VOICE }, "I didn't quite catch that. What can I help you with?");
+
+  // Final timeout — say goodbye
+  twiml.say({ voice: KRISTY_VOICE }, "I'm not hearing anything, so I'll let you go. Thanks for calling HaulFlow, have a great day!");
   twiml.hangup();
 
   return twiml.toString();
@@ -112,70 +129,106 @@ function buildTwiML(sayText, turnCount) {
 
 async function handleVoiceWebhook(req, res) {
   try {
+    const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
     const SpeechResult = (req.body.SpeechResult || '').trim();
-    const turnCount = parseInt(req.body.turnCount || '0', 10) + 1;
+    const Digits = (req.body.Digits || '').trim();
+    const turnCount = parseInt(req.query.turn || req.body.turnCount || '0', 10) + 1;
 
-    console.log(`[kristy-voice] Webhook hit. Turn: ${turnCount}. Speech: "${SpeechResult}"`);
+    const inputText = SpeechResult || Digits || '';
+    console.log(`[kristy-voice] Webhook hit. Turn: ${turnCount}. Speech: "${inputText}"`);
 
     let replyText;
     let history = [];
 
-    // Try to parse history from cookie
-    if (req.headers.cookie) {
-      try {
-        const match = req.headers.cookie.match(/kristy_history=([^;]+)/);
-        if (match) {
-          history = JSON.parse(decodeURIComponent(match[1]));
-        }
-      } catch {}
+    // Try to parse conversation history from Twilio's custom headers
+    // (Twilio doesn't persist cookies across webhook calls, so we use Gather action params)
+    const historyParam = req.query.history || '';
+    if (historyParam) {
+      try { history = JSON.parse(decodeURIComponent(historyParam)); } catch {}
     }
 
-    if (!SpeechResult || turnCount <= 1) {
-      // First call — greet
+    if (!inputText || turnCount <= 1) {
+      // First call — greeting
       replyText = "Hi, I'm Kristy with HaulFlow. How can I help you today?";
     } else if (turnCount > MAX_TURNS) {
       // Safety limit
       replyText = "Thanks so much for calling HaulFlow today. Have a wonderful day!";
-      res.type('text/xml');
       const VoiceResponse = twilio.twiml.VoiceResponse;
       const twiml = new VoiceResponse();
       twiml.say({ voice: KRISTY_VOICE }, replyText);
       twiml.hangup();
+      res.type('text/xml');
       return res.send(twiml.toString());
     } else {
       // Caller said something — run through Kristy's brain
-      history.push({ role: 'user', content: SpeechResult });
-      replyText = await kristyThink(SpeechResult, history);
+      history.push({ role: 'user', content: inputText });
+      replyText = await kristyThink(inputText, history);
       history.push({ role: 'assistant', content: replyText });
 
       // Check for goodbye
       const lower = replyText.toLowerCase();
-      const isGoodbye = lower.includes('goodbye') || lower.includes('have a great day') || lower.includes('thanks for calling');
+      const isGoodbye = lower.includes('goodbye') ||
+        (lower.includes('thanks for calling') && lower.includes('great day'));
 
       if (isGoodbye) {
-        res.type('text/xml');
         const VoiceResponse = twilio.twiml.VoiceResponse;
         const twiml = new VoiceResponse();
         twiml.say({ voice: KRISTY_VOICE }, replyText);
         twiml.hangup();
+        res.type('text/xml');
         return res.send(twiml.toString());
       }
     }
 
-    // Save history in cookie for next turn
-    const historyCookie = history.length > 0
-      ? `kristy_history=${encodeURIComponent(JSON.stringify(history.slice(-20)))}; Path=/; HttpOnly`
-      : '';
+    // Encode history into the Gather action URL so it persists across turns
+    let historyQueryParam = '';
+    if (history.length > 0) {
+      historyQueryParam = `&history=${encodeURIComponent(JSON.stringify(history.slice(-20)))}`;
+    }
+
+    // Temporarily monkey-patch req.get('host') for buildGatherTwiML
+    const gatherUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}${historyQueryParam}`;
+
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const twiml = new VoiceResponse();
+
+    const gather = twiml.gather({
+      input: 'speech',
+      action: gatherUrl,
+      method: 'POST',
+      timeout: GATHER_TIMEOUT,
+      speechTimeout: '3',
+      maxSpeechTime: 30,
+      numDigits: 1,
+    });
+
+    gather.say({ voice: KRISTY_VOICE }, replyText);
+
+    // Retry once if no input
+    const retryUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}${historyQueryParam}`;
+    const gather2 = twiml.gather({
+      input: 'speech',
+      action: retryUrl,
+      method: 'POST',
+      timeout: GATHER_TIMEOUT,
+      speechTimeout: '3',
+      maxSpeechTime: 30,
+      numDigits: 1,
+    });
+    gather2.say({ voice: KRISTY_VOICE }, "I didn't quite catch that. What can I help you with?");
+
+    // Final timeout — goodbye
+    twiml.say({ voice: KRISTY_VOICE }, "I'm not hearing anything, so I'll let you go. Thanks for calling HaulFlow, have a great day!");
+    twiml.hangup();
 
     res.type('text/xml');
-    if (historyCookie) res.setHeader('Set-Cookie', historyCookie);
-    res.send(buildTwiML(replyText, turnCount));
+    res.send(twiml.toString());
 
   } catch (err) {
     console.error('[kristy-voice] Webhook error:', err);
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
-    twiml.say({ voice: KRISTY_VOICE }, "I'm sorry, something went wrong. Please try calling back." );
+    twiml.say({ voice: 'Polly.Joanna' }, "I'm sorry, something went wrong. Please try calling back.");
     twiml.hangup();
     res.type('text/xml');
     res.status(500).send(twiml.toString());
