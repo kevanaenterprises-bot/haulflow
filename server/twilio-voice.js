@@ -43,7 +43,7 @@ Voice guidelines:
 // ---------------------------------------------------------------------------
 
 async function kristyThink(userText, conversationHistory) {
-  const openaiKey = process.env.OPENAI_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY;
   if (!openaiKey) {
     console.error('[kristy-voice] OPENAI_API_KEY not set');
     return "I'm excited to tell you more about HaulFlow! Visit go4fc dot com to learn about our trucking management software, or call back later when our team is available.";
