@@ -541,17 +541,15 @@ function handleConnection(ws, req) {
 // ---------------------------------------------------------------------------
 
 function handleVoiceWebhook(req, res) {
-  const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
-  const wsUrl = `${baseUrl}/api/twilio/voice/stream`;
-
+  // Simple test: just speak, no WebSocket
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
+  twiml.say({ voice: 'woman' }, 'Hi, this is Kristy with HaulFlow. The phone line is working! Hang tight while we finish setting up.');
+  twiml.pause({ length: 2 });
+  twiml.say({ voice: 'woman' }, 'Have a great day!');
+  twiml.hangup();
 
-  const connect = twiml.connect();
-  connect.stream({ url: wsUrl });
-
-  console.log(`[kristy-voice] Voice webhook hit — stream URL: ${wsUrl}`);
-
+  console.log('[kristy-voice] Voice webhook hit (simple Say mode)');
   res.type('text/xml');
   res.send(twiml.toString());
 }
