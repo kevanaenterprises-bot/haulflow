@@ -111,13 +111,14 @@ async function handleVoiceWebhook(req, res) {
     // <Gather> with speech recognition, <Say> nested inside
     const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turn}&retry=${retry}`;
     const gather = twiml.gather({
-      input: 'speech',
+      input: 'speech dtmf',
       action: actionUrl,
       method: 'POST',
-      timeout: '10',
-      speechTimeout: 'auto',
+      timeout: '15',
+      speechTimeout: '4',
       maxSpeechTime: '30',
       language: 'en-US',
+      enhanced: true,
       hints: 'HaulFlow,pricing,features,demo,trucking,freight,dispatch,load,driver,DVIR,billing,tracking',
     });
     gather.say({ voice: VOICE }, sayText);
