@@ -152,7 +152,7 @@ async function handleVoiceWebhook(req, res) {
     // Now listen — caller has up to 10s to start, 3s silence to end
     const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}&retry=${retryCount}`;
     twiml.gather({
-      input: 'speech dtmf',
+      input: 'speech',
       action: actionUrl,
       method: 'POST',
       timeout: 10,
