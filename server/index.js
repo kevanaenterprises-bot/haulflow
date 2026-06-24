@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit';
 import { registerDvirRoutes } from './dvir-routes.js';
 import { registerDemoRoutes } from './demo-routes.js';
 import { registerDriverAuthRoutes } from './driver-auth-routes.js';
+import { registerTwilioVoiceRoutes } from './twilio-voice.js';
 
 const { Pool } = pg;
 
@@ -1629,9 +1630,12 @@ runMigrations().then(async () => {
     console.log('[SETUP] Demo account password reset (if needed)');
   } catch {}
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[HaulFlow] API server running on port ${PORT}`);
   });
+
+  // Register Twilio Conversational Voice (Kristy) — WebSocket + webhook
+  registerTwilioVoiceRoutes(app, server);
 });
 // deploy trigger
 // v2 deploy trigger Mon Jun 22 23:08:23 UTC 2026
