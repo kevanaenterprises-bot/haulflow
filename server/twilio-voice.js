@@ -106,9 +106,12 @@ function buildTwiML(baseUrl, sayText, turnCount, history) {
     input: 'speech dtmf',
     action: actionUrl,
     method: 'POST',
-    timeout: 6,
-    speechTimeout: '4',
+    timeout: 10,
+    speechTimeout: 'auto',
     maxSpeechTime: 30,
+    speechModel: 'phone_call',
+    enhanced: true,
+    language: 'en-US',
   });
   // Silent prompt — just listening, no nested <Say> to avoid transcribing Kristy's voice
   gather.pause({ length: 1 });
@@ -119,9 +122,12 @@ function buildTwiML(baseUrl, sayText, turnCount, history) {
     input: 'speech dtmf',
     action: retryUrl,
     method: 'POST',
-    timeout: 8,
-    speechTimeout: '4',
+    timeout: 12,
+    speechTimeout: 'auto',
     maxSpeechTime: 30,
+    speechModel: 'phone_call',
+    enhanced: true,
+    language: 'en-US',
   });
   gather2.say({ voice: VOICE }, "I didn't quite catch that. Could you repeat what you said?");
 
