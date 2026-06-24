@@ -99,17 +99,20 @@ function isGoodbye(text) {
 // TwiML builders
 // ---------------------------------------------------------------------------
 
-const GATHER_OPTS = {
-  input: 'speech dtmf',
-  action: '/api/twilio/voice',
-  method: 'POST',
-  speechTimeout: '3',           // Wait up to 3s of silence to detect end of speech
-  speechModel: 'phone_call',
-  enhanced: true,
-  numResults: 1,
-  profanityFilter: false,
-  timeout: 10,                  // 10s of total silence before redirecting back
-};
+function getGatherOpts() {
+  const baseUrl = process.env.PUBLIC_URL;
+  return {
+    input: 'speech dtmf',
+    action: baseUrl ? `${baseUrl}/api/twilio/voice` : '/api/twilio/voice',
+    method: 'POST',
+    speechTimeout: '3',
+    speechModel: 'phone_call',
+    enhanced: true,
+    numResults: 1,
+    profanityFilter: false,
+    timeout: 10,
+  };
+}
 
 function buildResponseTwiML(speechText, isEnd = false) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -122,7 +125,7 @@ function buildResponseTwiML(speechText, isEnd = false) {
     // <Say> first, then <Gather> — more reliable for speech detection
     twiml.say({ voice: KRISTY_VOICE }, speechText);
     twiml.pause({ length: 1 });
-    const gather = twiml.gather(GATHER_OPTS);
+    const gather = twiml.gather(getGatherOpts());
     gather.say({ voice: KRISTY_VOICE }, 'What else can I help you with?');
     // Timeout redirect — keeps conversation alive
     gather.redirect('/api/twilio/voice');
@@ -142,7 +145,7 @@ function buildInitialTwiML() {
   twiml.pause({ length: 1 });
 
   // Now gather for their response
-  const gather = twiml.gather(GATHER_OPTS);
+  const gather = twiml.gather(getGatherOpts());
   gather.say({ voice: KRISTY_VOICE }, "How can I help you today?");
   gather.redirect('/api/twilio/voice');
 
@@ -231,7 +234,7 @@ async function handleVoiceWebhook(req, res) {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     twiml.say({ voice: KRISTY_VOICE }, "Sorry about that. Let me try again.");
-    const gather = twiml.gather(GATHER_OPTS);
+    const gather = twiml.gather(getGatherOpts());
     gather.say({ voice: KRISTY_VOICE }, "What can I help you with?");
     gather.redirect('/api/twilio/voice');
     res.type('text/xml');
