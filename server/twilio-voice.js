@@ -200,16 +200,18 @@ async function handleVoiceWebhook(req, res) {
     // Say the response, then record next caller input
     twiml.say({ voice: VOICE }, sayText);
 
-    // Record caller's response (max 15 seconds, trim silence)
+    // Record caller's response (max 12 seconds, trim silence)
+    // Uses Record + Whisper instead of Gather + Twilio STT (Twilio STT was returning empty)
     const recordAction = `${baseUrl}/api/twilio/voice?turn=${turn}&retry=${retry}`;
     twiml.record({
       action: recordAction,
       method: 'POST',
-      maxLength: 15,
-      finishOnKey: '#',
-      trim: 'do-not-trim', // Keep all audio for Whisper
-      transcribe: false,   // We use our own Whisper, not Twilio's
-      playBeep: true,       // Beep so caller knows we're listening
+      maxLength: 12,
+      finishOnKey: '',
+      trim: 'trim-silence',
+      transcribe: false,   // We use our own Whisper
+      playBeep: true,       // Beep so caller knows recording started
+      recordingStatusCallback: `${baseUrl}/api/twilio/voice-status?turn=${turn}`,
     });
 
     res.type('text/xml');
@@ -257,5 +259,10 @@ export function registerTwilioVoiceRoutes(app) {
   console.log('[kristy-voice] Registering Twilio Conversational Voice routes (Record + Whisper)...');
   app.post('/api/twilio/voice', handleVoiceWebhook);
   app.post('/api/twilio/sms', handleSmsWebhook);
-  console.log('[kristy-voice] ✅ POST /api/twilio/voice + POST /api/twilio/sms');
+  // Recording status callback (fires when recording is ready)
+  app.post('/api/twilio/voice-status', (req, res) => {
+    console.log(`[kristy-voice] Recording status: ${req.body.RecordingStatus} url:${req.body.RecordingUrl} duration:${req.body.RecordingDuration}s`);
+    res.status(200).send('');
+  });
+  console.log('[kristy-voice] ✅ POST /api/twilio/voice + POST /api/twilio/sms + POST /api/twilio/voice-status');
 }
