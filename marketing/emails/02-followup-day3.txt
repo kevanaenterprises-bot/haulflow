@@ -1,0 +1,56 @@
+HAULFLOW FOUNDING FREE TIER — FOLLOW-UP EMAIL (DAY 3)
+======================================================
+SEND: Day 3 (only to non-openers and non-clickers from Day 0)
+FROM: Kevin @ Turtle Logistics LLC <sales@turtlelogisticsllc.com>
+SUBJECT LINE OPTIONS:
+  A: "Re: Free TMS for 12 owner-operators — [N] slots remaining"
+  B: "Quick question about your dispatch setup, [FIRST_NAME]"
+  C: "What [COMPANY_NAME] could save with automated invoicing"
+
+---
+
+Hi [FIRST_NAME],
+
+I reached out a few days ago about HaulFlow's founding free tier — 12 months of our full trucking management platform at $0 for 12 Android carriers.
+
+I wanted to follow up with a bit more detail on what's actually inside the platform, since a few folks asked:
+
+**What owner-operators are saying they need most:**
+
+✅ **Load Dispatching** — No more spreadsheet chaos. See every load, assign drivers, track status from one dashboard. Works on Android phones your drivers already carry.
+
+✅ **Driver Portal (Android App)** — Your drivers get their own app. They see assigned loads, submit DVIR inspections, and log trip data without calling you. It's built for small fleets, not enterprise carriers with IT departments.
+
+✅ **Automated Invoicing** — Load delivered? Invoice generated automatically. Send to brokers, track payment status. Carriers using this feature report getting paid 30-40% faster because nothing falls through the cracks.
+
+✅ **Built-In Compliance** — DVIR inspections and IFTA reports generated from the same system you already run. No separate tools, no duplicate data entry.
+
+✅ **Road Tour with Voice Narration** — This one's unique. We use ElevenLabs voice AI to narrate route details aloud — stops, hazards, ETA — so your drivers can keep their eyes on the road and hands on the wheel. Safer driving, less distracted.
+
+**Who's this built for?**
+
+Small carriers and owner-operators running 1–5 trucks. That's it. We're not trying to be the next Trimble or McLeod — we're building the tool that guys running 2-3 trucks actually want to use.
+
+I built HaulFlow for my own company, Turtle Logistics LLC, because nothing on the market worked the way a small operation needs it to. Now I'm sharing it with 12 founding carriers to help us shape the Android experience.
+
+**[N] of 12 founding slots are still open.**
+
+→ [SIGNUP_LINK]
+
+Even if you're not ready to commit today, reply and let me know what your biggest pain point is with dispatch or invoicing. I'd genuinely like to hear it — that's exactly the feedback that shapes what we build next.
+
+Best,
+Kevin
+Turtle Logistics LLC
+[PHONE] | [LINKEDIN]
+
+P.S. — Remember: card required to hold the slot, but you pay $0/month for the full 12 months. No hidden fees, no charges during trial. Cancel anytime.
+
+---
+
+TRACKING NOTES:
+- Tag: haulflow-founding-v1-followup
+- Exclude: anyone who opened/clicked/cancelled from Day 0
+- Nurture path: if opened but no click, send variant B subject line
+- Direct reply path: forward to Kevin within 4 hours
+- Slot counter: update [N] before each send batch

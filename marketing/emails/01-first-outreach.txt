@@ -1,0 +1,55 @@
+HAULFLOW FOUNDING FREE TIER — FIRST OUTREACH EMAIL
+===================================================
+SEND: Day 0
+FROM: Kevin @ Turtle Logistics LLC <sales@turtlelogisticsllc.com>
+SUBJECT LINE OPTIONS (test all 3, rotate across segments):
+  A: "Free TMS for 12 owner-operators (Android) — 1 year, $0"
+  B: "Your trucking company just got a free dispatch system for a year"
+  C: "Founding member: Free fleet management for your Android fleet"
+
+---
+
+Hi [FIRST_NAME],
+
+I'll get straight to it — I'm looking for 12 Android-using owner-operators to beta-test HaulFlow, our trucking management platform, at zero cost for a full year.
+
+**What you get, free for 12 months:**
+
+• Load dispatching — assign, track, and manage loads from your phone
+• Driver portal (Android) — your drivers see loads, submit DVIRs, log IFTA all from their phone
+• Automated invoicing — stop chasing payments, let the system bill for you
+• Fleet tracking — real-time visibility on every truck in your fleet
+• DVIR inspections & IFTA reports — built-in compliance, no extra tools
+• Road Tour narration — ElevenLabs voice AI reads route details aloud so your drivers stay focused on the road
+
+Normally this runs $150/month. The first 12 carriers who sign up lock in a full year at $0.
+
+**Here's the deal:**
+
+We ask for a card on file to hold your slot (you won't be charged during the trial — $0/month for 12 months). After the year, you keep your founding-member rate, well below retail.
+
+**Why only 12?**
+
+We're building our Android-first experience around real feedback from real small carriers. Once these 12 slots fill, the next tier is already 6 months free for 15 slots — half the value, and those are going fast too.
+
+I checked your FMCSA profile — [NUMBER_OF_TRUCKS] truck[s], active authority out of [CITY_STATE]. You're exactly who we built this for.
+
+**Claim your slot here:** [SIGNUP_LINK]
+
+If you've got questions before signing up, just reply to this email. I'm a small carrier operator too (Turtle Logistics LLC), and I built HaulFlow because I was tired of paying too much for software that wasn't built for guys like us.
+
+Talk soon,
+Kevin
+Turtle Logistics LLC
+[PHONE] | [LINKEDIN]
+
+P.S. — These 12 founding slots are first-come, first-served. If you're on the fence, lock in your spot now and decide later. You can always cancel before the year is up with no penalty.
+
+---
+
+TRACKING NOTES:
+- Tag: haulflow-founding-v1-outreach
+- Segment: [STATE] / [TRUCK_COUNT] trucks
+- A/B/C subject line tracking
+- CTA: [SIGNUP_LINK]
+- Reply handling: forward to Kevin within 4 hours

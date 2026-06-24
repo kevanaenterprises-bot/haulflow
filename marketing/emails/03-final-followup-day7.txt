@@ -1,0 +1,58 @@
+HAULFLOW FOUNDING FREE TIER — FINAL FOLLOW-UP (DAY 7)
+======================================================
+SEND: Day 7 (only to non-responders from Days 0 and 3)
+FROM: Kevin @ Turtle Logistics LLC <sales@turtlelogisticsllc.com>
+SUBJECT LINE OPTIONS:
+  A: "Last call — [N] founding slots left for free TMS"
+  B: "Closing this out: free fleet management for [COMPANY_NAME]"
+  C: "[FIRST_NAME], this offer expires [DATE]"
+
+---
+
+Hi [FIRST_NAME],
+
+This is my last email on this — I don't want to spam you, and I respect your inbox.
+
+I'm writing because the founding free tier for HaulFlow is almost full, and I wanted to give you one last shot before these slots are gone for good.
+
+**Here's where we stand:**
+
+• 12 founding slots at $0/month for 12 months
+• [N] slots remain as of today
+• Once they're gone, the next best deal is 6 months free — half the value
+• After that, pricing jumps to retail ($350–$550/month for fleets)
+
+**What you're saying no to if you skip this:**
+
+→ A full trucking management system — dispatching, driver app, invoicing, compliance — all running from your phone for $0
+→ Voice-narrated Road Tour (ElevenLabs AI) — no other TMS offers this
+→ Founding member status — your feedback shapes the product, and you lock in below-retail pricing after the free year
+→ No risk — card on file to hold the slot, but zero charges during the entire 12-month trial
+
+**Why I'm capping it at 12:**
+
+I'm one guy running a small carrier (Turtle Logistics LLC) who built a tool that actually works for small operators. I can only give this level of personal support to a handful of founding users. These 12 carriers get direct access to me — not a support ticket queue, not a chatbot — me.
+
+**If you run 1–5 trucks and use Android, this is built for you.**
+
+→ [SIGNUP_LINK]
+
+After these slots close, I'm moving on to onboarding and won't re-open this offer.
+
+If this isn't for you, no hard feelings — just let me know and I'll take you off the list. But if you've been looking for a TMS that doesn't cost a fortune and actually works for a small fleet, this is the best deal you'll see.
+
+Thanks for reading,
+Kevin
+Turtle Logistics LLC
+[PHONE] | [LINKEDIN]
+
+P.S. — The card-on-file requirement exists solely to prevent no-shows from taking a slot someone else needs. You are not charged anything during the 12-month free period. If you want to verify this, reply to this email and I'll walk you through it personally.
+
+---
+
+TRACKING NOTES:
+- Tag: haulflow-founding-v1-final
+- Exclude: anyone who opened/clicked/replied/cancelled from Days 0 or 3
+- Hard close: no further emails after this (add to suppression list)
+- Slot counter: CRITICAL — update [N] before send. If 0 remaining, do NOT send.
+- Deadline date: set [DATE] to 3 business days after Day 7 send
