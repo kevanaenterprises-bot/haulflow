@@ -1,33 +1,20 @@
 // server/twilio-voice.js
-// Conversational Kristy — Twilio Media Streams Voice AI
+// Conversational Kristy — Twilio Voice AI (HTTP callback approach)
 //
 // Architecture:
-//   Caller → Twilio → Media Streams (WebSocket) → STT → GPT (Kristy's brain) → TTS → audio back
+//   Caller → Twilio → POST /api/twilio/voice (TwiML with <Gather>)
+//   Caller speaks → Twilio STT → POST /api/twilio/voice (with SpeechResult)
+//   → Kristy's GPT brain → <Say> response → loop
 //
-//   Incoming: Twilio sends 8kHz μ-law audio (20ms chunks, base64)
-//   Outgoing: ElevenLabs TTS → 8kHz μ-law → back to Twilio via WebSocket
+// No WebSocket needed — works on any hosting that handles HTTP POST.
 
-import WebSocket, { WebSocketServer } from 'ws';
 import twilio from 'twilio';
-import { spawn } from 'child_process';
-import { writeFile, readFile, mkdtemp, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const KRISTY_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || '8DzKSPdgEQPaK5vKG0Rs';
-const SAMPLE_RATE = 8000;
-const CHUNK_MS = 20;
-const CHUNK_SIZE = (SAMPLE_RATE * CHUNK_MS) / 1000; // 160 bytes per chunk
-
-// Silence detection tuning
-const SILENCE_THRESHOLD = 180;   // μ-law energy threshold (sum of |byte - 128|) per 20ms chunk
-const MIN_SPEECH_CHUNKS = 5;      // ~100ms min speech before we start tracking
-const MAX_SILENCE_CHUNKS = 18;    // ~360ms of silence ends the utterance
-const MIN_TRANSCRIBE_MS = 400;    // min accumulated audio for Whisper
+const KRISTY_VOICE = 'Polly.Joanna'; // Amazon Polly voice, natural sounding
 
 // Kristy's brain — same identity as avatar-chat.js, tuned for live voice
 const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable team member for HaulFlow — a modern Transportation Management System (TMS) for trucking and freight companies.
@@ -53,135 +40,13 @@ Voice guidelines:
 - If someone says goodbye or thanks, respond naturally and end the conversation`;
 
 // ---------------------------------------------------------------------------
-// μ-law ↔ PCM16 conversion (ITU-T G.711)
-// ---------------------------------------------------------------------------
-
-const ULAW_TABLE = new Int16Array(256);
-const ULAW_QUANT = [0, 132, 396, 924, 1980, 4092, 8316, 16764];
-
-for (let i = 0; i < 256; i++) {
-  const u = ~i & 0xff;
-  const t = ((u & 0x0f) << 3) + ULAW_QUANT[(u >> 4) & 0x07];
-  ULAW_TABLE[i] = (u & 0x80) ? (128 - t) : (t - 128);
-}
-
-function ulawToPcm16(ulawBuf) {
-  const pcm = new Int16Array(ulawBuf.length);
-  for (let i = 0; i < ulawBuf.length; i++) {
-    pcm[i] = ULAW_TABLE[ulawBuf[i]];
-  }
-  return pcm;
-}
-
-function pcm16ToWav(pcm16, sampleRate = 8000) {
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-  const blockAlign = numChannels * (bitsPerSample / 8);
-  const dataSize = pcm16.length * 2;
-  const buf = Buffer.alloc(44 + dataSize);
-
-  buf.write('RIFF', 0);
-  buf.writeUInt32LE(36 + dataSize, 4);
-  buf.write('WAVE', 8);
-  buf.write('fmt ', 12);
-  buf.writeUInt32LE(16, 16);             // Subchunk1Size (PCM)
-  buf.writeUInt16LE(1, 20);              // AudioFormat (PCM)
-  buf.writeUInt16LE(numChannels, 22);
-  buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(byteRate, 28);
-  buf.writeUInt16LE(blockAlign, 32);
-  buf.writeUInt16LE(bitsPerSample, 34);
-  buf.write('data', 36);
-  buf.writeUInt32LE(dataSize, 40);
-
-  for (let i = 0; i < pcm16.length; i++) {
-    buf.writeInt16LE(pcm16[i], 44 + i * 2);
-  }
-
-  return buf;
-}
-
-function ulawEnergy(ulawBytes) {
-  let energy = 0;
-  for (let i = 0; i < ulawBytes.length; i++) {
-    energy += Math.abs(ulawBytes[i] - 128);
-  }
-  return energy;
-}
-
-// ---------------------------------------------------------------------------
-// Audio conversion helpers
-// ---------------------------------------------------------------------------
-
-// Convert MP3 buffer → 8kHz μ-law via ffmpeg (fallback if ulaw_8000 TTS fails)
-async function mp3ToMulaw(mp3Buffer) {
-  const tmpDir = await mkdtemp(join(tmpdir(), 'kristy-'));
-  const mp3Path = join(tmpDir, 'speech.mp3');
-  const rawPath = join(tmpDir, 'speech.ul');
-
-  try {
-    await writeFile(mp3Path, mp3Buffer);
-
-    await new Promise((resolve, reject) => {
-      const proc = spawn('ffmpeg', [
-        '-i', mp3Path,
-        '-f', 'mulaw',
-        '-ar', String(SAMPLE_RATE),
-        '-ac', '1',
-        '-c:a', 'pcm_mulaw',
-        '-y', rawPath,
-      ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-      let stderr = '';
-      proc.stderr.on('data', d => { stderr += d; });
-      proc.on('close', code =>
-        code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-200)}`))
-      );
-      proc.on('error', reject);
-    });
-
-    return await readFile(rawPath);
-  } finally {
-    rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
-// ---------------------------------------------------------------------------
-// STT: OpenAI Whisper
-// ---------------------------------------------------------------------------
-
-async function transcribeAudio(wavBuffer) {
-  const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: (() => {
-      const fd = new FormData();
-      fd.append('file', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-      fd.append('model', 'whisper-1');
-      fd.append('language', 'en');
-      fd.append('response_format', 'text');
-      return fd;
-    })(),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.text();
-    console.error('[kristy-voice] Whisper error:', resp.status, err.slice(0, 200));
-    return '';
-  }
-
-  return (await resp.text()).trim();
-}
-
-// ---------------------------------------------------------------------------
 // LLM: Kristy's brain (GPT-4o-mini)
 // ---------------------------------------------------------------------------
 
 async function kristyThink(userText, conversationHistory) {
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
-    ...conversationHistory.slice(-16), // Keep last 8 exchanges
+    ...conversationHistory.slice(-16),
     { role: 'user', content: userText },
   ];
 
@@ -210,377 +75,210 @@ async function kristyThink(userText, conversationHistory) {
 }
 
 // ---------------------------------------------------------------------------
-// TTS: ElevenLabs (tries ulaw_8000 first, falls back to mp3+ffmpeg)
+// Is this a goodbye?
 // ---------------------------------------------------------------------------
 
-async function kristySpeak(text) {
-  // Attempt 1: ElevenLabs native μ-law output
-  try {
-    const resp = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${KRISTY_VOICE_ID}?output_format=ulaw_8000`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_turbo_v2_5',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      }
-    );
+const GOODBYE_PATTERNS = /\b(bye|goodbye|good\s*bye|thanks?\s*(a\s*lot|so\s*much)?|see\s*ya|take\s*care|have\s*a\s*(good|great)\s*(day|one)|talk\s*(to\s*you\s*)?later|gotta\s*go|i'm\s*(done|set)|that's?\s*(all|it)|nothing\s*else|no\s*(more\s*)?questions?)\b/i;
 
-    if (resp.ok) {
-      const buf = Buffer.from(await resp.arrayBuffer());
-      if (buf.length > 0) return buf; // Raw 8kHz μ-law — ready to send
-    }
-  } catch (e) {
-    console.warn('[kristy-voice] ulaw_8000 TTS failed, falling back to mp3:', e.message);
-  }
-
-  // Attempt 2: MP3 output + ffmpeg conversion
-  try {
-    const resp = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${KRISTY_VOICE_ID}`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_turbo_v2_5',
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-        }),
-      }
-    );
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      console.error('[kristy-voice] ElevenLabs mp3 error:', resp.status, err.slice(0, 200));
-      return null;
-    }
-
-    const mp3Buf = Buffer.from(await resp.arrayBuffer());
-    return await mp3ToMulaw(mp3Buf);
-  } catch (e) {
-    console.error('[kristy-voice] mp3 TTS error:', e.message);
-    return null;
-  }
+function isGoodbye(text) {
+  return GOODBYE_PATTERNS.test(text.trim());
 }
 
 // ---------------------------------------------------------------------------
-// Call Session — per-call state machine
+// Build TwiML helpers
 // ---------------------------------------------------------------------------
 
-class CallSession {
-  constructor(streamSid, callSid, ws) {
-    this.streamSid = streamSid;
-    this.callSid = callSid;
-    this.ws = ws;
-
-    // Conversation state
-    this.conversationHistory = [];
-
-    // Audio accumulation
-    this.audioChunks = [];       // Buffer of μ-law chunks for current utterance
-    this.silenceCount = 0;       // Consecutive low-energy chunks
-    this.speechCount = 0;        // Number of speech chunks accumulated
-    this.inSpeech = false;       // True once we've started capturing an utterance
-
-    // Pipeline state
-    this.isProcessing = false;   // STT→LLM→TTS pipeline running
-    this.isSpeaking = false;      // Sending audio to caller
-    this.bargeIn = false;        // Caller interrupted Kristy
-
-    // Lifecycle
-    this.greeted = false;
-    this.stopped = false;
-  }
-
-  // Send a media chunk back to Twilio
-  sendMediaMsg(payload) {
-    if (this.stopped || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      event: 'media',
-      streamSid: this.streamSid,
-      media: { payload },
-    }));
-  }
-
-  sendMarkMsg(name) {
-    if (this.stopped || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      event: 'mark',
-      streamSid: this.streamSid,
-      mark: { name },
-    }));
-  }
-
-  sendClearMsg() {
-    if (this.stopped || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({
-      event: 'clear',
-      streamSid: this.streamSid,
-    }));
-  }
-
-  // Stream an entire μ-law buffer back to Twilio in 20ms chunks
-  async sendAudioBuffer(mulawBuf) {
-    this.isSpeaking = true;
-    this.bargeIn = false;
-    this.sendClearMsg();
-    this.sendMarkMsg('start_speech');
-
-    let offset = 0;
-    while (offset < mulawBuf.length) {
-      if (this.stopped || this.bargeIn) break;
-      const chunk = mulawBuf.subarray(offset, offset + CHUNK_SIZE);
-      this.sendMediaMsg(chunk.toString('base64'));
-      offset += CHUNK_SIZE;
-      // Pace to roughly real-time (20ms chunks, send slightly fast to avoid gaps)
-      await new Promise(r => setTimeout(r, 16));
-    }
-
-    this.sendMarkMsg('end_speech');
-    this.isSpeaking = false;
-  }
-
-  // Full STT → LLM → TTS pipeline
-  async processUtterance() {
-    if (this.isProcessing || this.stopped) return;
-
-    const audioData = Buffer.concat(this.audioChunks);
-    this.audioChunks = [];
-    this.silenceCount = 0;
-    this.speechCount = 0;
-    this.inSpeech = false;
-    this.isProcessing = true;
-
-    try {
-      // Check we have enough audio for Whisper
-      const durationMs = (audioData.length / CHUNK_SIZE) * CHUNK_MS;
-      if (durationMs < MIN_TRANSCRIBE_MS) {
-        console.log(`[kristy-voice] Audio too short (${durationMs}ms), skipping`);
-        return;
-      }
-
-      console.log(`[kristy-voice][${this.callSid}] Processing ${durationMs}ms of audio`);
-
-      // Step 1: STT — μ-law → PCM16 → WAV → Whisper
-      const pcm16 = ulawToPcm16(audioData);
-      const wav = pcm16ToWav(pcm16);
-      const transcript = await transcribeAudio(wav);
-
-      if (!transcript || transcript.length < 2) {
-        console.log('[kristy-voice] Empty/short transcript, ignoring');
-        return;
-      }
-
-      console.log(`[kristy-voice][${this.callSid}] Transcript: "${transcript}"`);
-
-      // Step 2: LLM — Kristy thinks
-      const response = await kristyThink(transcript, this.conversationHistory);
-      console.log(`[kristy-voice][${this.callSid}] Kristy: "${response}"`);
-
-      // Save to conversation history
-      this.conversationHistory.push(
-        { role: 'user', content: transcript },
-        { role: 'assistant', content: response }
-      );
-
-      // Step 3: TTS — Kristy speaks
-      const speechAudio = await kristySpeak(response);
-      if (speechAudio) {
-        await this.sendAudioBuffer(speechAudio);
-      }
-    } catch (err) {
-      console.error(`[kristy-voice][${this.callSid}] Pipeline error:`, err);
-    } finally {
-      this.isProcessing = false;
-    }
-  }
-
-  // Handle an incoming media chunk from Twilio
-  handleMedia(ulawBytes) {
-    if (this.stopped || this.isSpeaking) return;
-
-    const energy = ulawEnergy(ulawBytes);
-
-    // Barge-in detection: caller speaks while Kristy is mid-response
-    // (Handled in connection handler before calling this)
-
-    if (energy > SILENCE_THRESHOLD) {
-      // Speech detected
-      this.silenceCount = 0;
-      this.speechCount++;
-
-      if (!this.inSpeech && this.speechCount >= MIN_SPEECH_CHUNKS) {
-        this.inSpeech = true;
-        console.log(`[kristy-voice][${this.callSid}] Speech started`);
-      }
-
-      if (this.inSpeech) {
-        this.audioChunks.push(ulawBytes);
-      }
-    } else {
-      // Silence
-      if (this.inSpeech) {
-        this.silenceCount++;
-        this.audioChunks.push(ulawBytes); // Keep trailing silence for clean WAV
-
-        if (this.silenceCount >= MAX_SILENCE_CHUNKS) {
-          console.log(`[kristy-voice][${this.callSid}] Silence detected, processing`);
-          // Fire and don't await — let the session method manage its own state
-          this.processUtterance();
-        }
-      } else {
-        // Not in speech yet — reset counter
-        this.speechCount = 0;
-      }
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// WebSocket connection handler
-// ---------------------------------------------------------------------------
-
-function handleConnection(ws, req) {
-  console.log('[kristy-voice] WebSocket connected from', req.headers['x-forwarded-for'] || 'unknown');
-
-  let session = null;
-
-  ws.on('message', (raw) => {
-    let msg;
-    try {
-      msg = JSON.parse(raw.toString());
-    } catch {
-      return;
-    }
-
-    switch (msg.event) {
-      case 'connected':
-        console.log('[kristy-voice] Twilio Media Stream connected:', msg.protocol, 'v' + msg.version);
-        break;
-
-      case 'start': {
-        const { streamSid, callSid } = msg;
-        console.log(`[kristy-voice] Call started — callSid: ${callSid}, streamSid: ${streamSid}`);
-        session = new CallSession(streamSid, callSid, ws);
-
-        // Send Kristy's greeting after a brief delay (let the stream settle)
-        setTimeout(async () => {
-          try {
-            console.log(`[kristy-voice][${callSid}] Generating greeting...`);
-            const greeting = await kristySpeak("Hi, I'm Kristy with HaulFlow. How can I help you today?");
-            if (greeting && session && !session.stopped) {
-              await session.sendAudioBuffer(greeting);
-              session.greeted = true;
-              console.log(`[kristy-voice][${callSid}] Greeting sent`);
-            }
-          } catch (err) {
-            console.error(`[kristy-voice][${callSid}] Greeting error:`, err);
-          }
-        }, 600);
-        break;
-      }
-
-      case 'media': {
-        if (!session || session.stopped) return;
-
-        const audioBytes = Buffer.from(msg.media.payload, 'base64');
-        const energy = ulawEnergy(audioBytes);
-
-        // Barge-in: caller speaks while Kristy is talking
-        if (session.isSpeaking && !session.isProcessing && energy > SILENCE_THRESHOLD * 2) {
-          session.bargeIn = true;
-          console.log(`[kristy-voice][${session.callSid}] Barge-in detected`);
-        }
-
-        session.handleMedia(audioBytes);
-        break;
-      }
-
-      case 'stop':
-        console.log(`[kristy-voice] Call ended — streamSid: ${msg.streamSid}`);
-        if (session) {
-          session.stopped = true;
-          session = null;
-        }
-        break;
-
-      default:
-        // Ignore mark echoes, etc.
-        break;
-    }
-  });
-
-  ws.on('close', (code, reason) => {
-    console.log(`[kristy-voice] WebSocket closed: ${code} ${reason || ''}`);
-    if (session) {
-      session.stopped = true;
-      session = null;
-    }
-  });
-
-  ws.on('error', (err) => {
-    console.error('[kristy-voice] WebSocket error:', err.message);
-    if (session) {
-      session.stopped = true;
-      session = null;
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// HTTP webhook: POST /api/twilio/voice → Returns TwiML
-// ---------------------------------------------------------------------------
-
-function handleVoiceWebhook(req, res) {
-  // Simple test: just speak, no WebSocket
+function buildTwiML(speechText, isEnd = false) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
-  twiml.say({ voice: 'woman' }, 'Hi, this is Kristy with HaulFlow. The phone line is working! Hang tight while we finish setting up.');
-  twiml.pause({ length: 2 });
-  twiml.say({ voice: 'woman' }, 'Have a great day!');
-  twiml.hangup();
 
-  console.log('[kristy-voice] Voice webhook hit (simple Say mode)');
-  res.type('text/xml');
-  res.send(twiml.toString());
+  twiml.say({ voice: KRISTY_VOICE }, speechText);
+
+  if (isEnd) {
+    twiml.say({ voice: KRISTY_VOICE }, 'Thanks for calling HaulFlow. Have a great day!');
+    twiml.hangup();
+  } else {
+    // Gather the next thing the caller says
+    const gather = twiml.gather({
+      input: 'speech',
+      action: '/api/twilio/voice',
+      method: 'POST',
+      speechTimeout: 'auto',
+      speechModel: 'phone_call',
+      enhanced: true,
+      maxSpeechTimeout: 15,
+      profanityFilter: false,
+    });
+    gather.say({ voice: KRISTY_VOICE }, 'What else can I help you with?');
+  }
+
+  return twiml.toString();
+}
+
+function buildInitialTwiML() {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+  const twiml = new VoiceResponse();
+
+  const gather = twiml.gather({
+    input: 'speech',
+    action: '/api/twilio/voice',
+    method: 'POST',
+    speechTimeout: 'auto',
+    speechModel: 'phone_call',
+    enhanced: true,
+    maxSpeechTimeout: 15,
+    profanityFilter: false,
+    numDigits: 1, // Also allow keypad input (1 = pricing, 2 = features, etc.)
+  });
+  gather.say({ voice: KRISTY_VOICE }, "Hi, I'm Kristy with HaulFlow. I can tell you about our trucking management software, pricing, or anything else. How can I help you today?");
+
+  return twiml.toString();
 }
 
 // ---------------------------------------------------------------------------
-// Export — call from server/index.js after creating the HTTP server
+// HTTP webhook handler
+// ---------------------------------------------------------------------------
+
+async function handleVoiceWebhook(req, res) {
+  const VoiceResponse = twilio.twiml.VoiceResponse;
+
+  try {
+    // If Twilio sends SpeechResult, process the caller's speech
+    const speechResult = req.body?.SpeechResult || req.body?.speechResult;
+    const digits = req.body?.Digits;
+
+    if (speechResult) {
+      const callSid = req.body?.CallSid || 'unknown';
+      console.log(`[kristy-voice][${callSid}] Heard: "${speechResult}"`);
+
+      // Restore conversation history from Twilio cookies or start fresh
+      // (Twilio passes cookies back on each webhook)
+      let history = [];
+      try {
+        const cookie = req.headers?.cookie || '';
+        const match = cookie.match(/kristy_history=([^;]+)/);
+        if (match) {
+          history = JSON.parse(decodeURIComponent(match[1]));
+        }
+      } catch {}
+
+      const reply = await kristyThink(speechResult, history);
+      console.log(`[kristy-voice][${callSid}] Kristy: "${reply}"`);
+
+      const shouldEnd = isGoodbye(speechResult) && (
+        reply.toLowerCase().includes('goodbye') ||
+        reply.toLowerCase().includes('take care') ||
+        reply.toLowerCase().includes('great day') ||
+        reply.toLowerCase().includes('thanks')
+      );
+
+      // Save history to cookie for next turn
+      history.push(
+        { role: 'user', content: speechResult },
+        { role: 'assistant', content: reply }
+      );
+
+      const twiml = buildTwiML(reply, shouldEnd);
+
+      res.setHeader('Set-Cookie', `kristy_history=${encodeURIComponent(JSON.stringify(history.slice(-20)))}; Path=/; HttpOnly`);
+      res.type('text/xml');
+      return res.send(twiml);
+    }
+
+    // If caller pressed a digit
+    if (digits) {
+      const callSid = req.body?.CallSid || 'unknown';
+      console.log(`[kristy-voice][${callSid}] Digit pressed: ${digits}`);
+
+      let history = [];
+      try {
+        const cookie = req.headers?.cookie || '';
+        const match = cookie.match(/kristy_history=([^;]+)/);
+        if (match) {
+          history = JSON.parse(decodeURIComponent(match[1]));
+        }
+      } catch {}
+
+      let reply;
+      switch (digits) {
+        case '1':
+          reply = "HaulFlow offers flexible plans for carriers of all sizes. Visit go4fc.com to see pricing and start a free trial. Would you like to know more about any specific features?";
+          break;
+        case '2':
+          reply = "Our key features include load management, real-time GPS tracking, digital DVIR inspections, automated billing, driver dispatch, and compliance reporting. What would you like to know more about?";
+          break;
+        default:
+          reply = await kristyThink(`The caller pressed number ${digits}`, history);
+      }
+
+      history.push(
+        { role: 'user', content: `[pressed ${digits}]` },
+        { role: 'assistant', content: reply }
+      );
+
+      const twiml = buildTwiML(reply);
+      res.setHeader('Set-Cookie', `kristy_history=${encodeURIComponent(JSON.stringify(history.slice(-20)))}; Path=/; HttpOnly`);
+      res.type('text/xml');
+      return res.send(twiml);
+    }
+
+    // No speech or digits — initial call or no input (retry)
+    const twiml = buildInitialTwiML();
+    res.type('text/xml');
+    return res.send(twiml);
+  } catch (err) {
+    console.error('[kristy-voice] Webhook error:', err);
+    const twiml = new VoiceResponse();
+    twiml.say({ voice: KRISTY_VOICE }, "I'm sorry, something went wrong. Please try calling back.");
+    twiml.hangup();
+    res.type('text/xml');
+    return res.send(twiml.toString());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SMS webhook handler
+// ---------------------------------------------------------------------------
+
+async function handleSmsWebhook(req, res) {
+  const from = req.body?.From || 'unknown';
+  const body = req.body?.Body || '';
+  console.log(`[kristy-sms] From: ${from}, Body: "${body}"`);
+
+  if (!body.trim()) {
+    return res.type('text/xml').send('<Response></Response>');
+  }
+
+  try {
+    const reply = await kristyThink(body, []);
+    console.log(`[kristy-sms] Reply: "${reply}"`);
+
+    const VoiceResponse = twilio.twiml.MessagingResponse;
+    const twiml = new VoiceResponse();
+    twiml.message(reply);
+    res.type('text/xml');
+    return res.send(twiml.toString());
+  } catch (err) {
+    console.error('[kristy-sms] Error:', err);
+    const VoiceResponse = twilio.twiml.MessagingResponse;
+    const twiml = new VoiceResponse();
+    twiml.message("Sorry, I'm having trouble right now. Please try again.");
+    res.type('text/xml');
+    return res.send(twiml.toString());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Export
 // ---------------------------------------------------------------------------
 
 export function registerTwilioVoiceRoutes(app, httpServer) {
   console.log('[kristy-voice] Registering Twilio Conversational Voice routes...');
 
-  // HTTP endpoint for Twilio voice webhook
   app.post('/api/twilio/voice', handleVoiceWebhook);
+  app.post('/api/twilio/sms', handleSmsWebhook);
 
-  // WebSocket for Media Stream — attach directly to HTTP server with path matching
-  const wss = new WebSocketServer({
-    noServer: true,
-    clientTracking: false,
-  });
-
-  httpServer.on('upgrade', (req, socket, head) => {
-    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    if (url.pathname === '/api/twilio/voice/stream') {
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit('connection', ws, req);
-      });
-    }
-    // Don't destroy the socket for other paths — other middleware may need it
-  });
-
-  wss.on('connection', handleConnection);
-
-  console.log('[kristy-voice] ✅ Twilio voice routes registered (POST /api/twilio/voice + WSS /api/twilio/voice/stream)');
+  console.log('[kristy-voice] ✅ Twilio voice routes registered:');
+  console.log('[kristy-voice]    POST /api/twilio/voice (voice calls)');
+  console.log('[kristy-voice]    POST /api/twilio/sms (SMS)');
 }
