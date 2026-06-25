@@ -43,6 +43,7 @@ HaulFlow product knowledge:
 - Live GPS Tracking: real-time truck location on an interactive map
 - Automated Billing & Invoicing: generate invoices from completed loads, track payment status
 - Load Board Integration: connect to load boards to find and book freight faster
+- Third-Party Integrations: HaulFlow integrates with the tools carriers already use — AP (accounts payable) programs, ELD providers, PrePass, and more. Any software that has an API can be connected to HaulFlow. The integration is a one-time fee of $300. If a customer has a specific tool or idea they want built into HaulFlow, the team will work with them to make it happen — as long as that software exposes an API, it can be integrated.
 - IFTA Reporting: automated International Fuel Tax Agreement tracking and reporting — saves carriers hours of manual fuel tax calculations every quarter
 - Compliance & Reporting: HOS logs, maintenance alerts, dashboards
 - Road Tour: one of HaulFlow's most unique features — built specifically for the drivers. As a driver travels, Road Tour detects nearby historical markers from a database of over 226,000 markers across America and delivers the story and significance of each one. It is HaulFlow's way of giving back to the men and women who keep this country running while they are out on the road sacrificing time with their families. No other TMS does anything like it.
