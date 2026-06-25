@@ -8,14 +8,45 @@ const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY || '';
 const VOICE = 'Polly.Joanna';
 const MAX_TURNS = 12;
 
-const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable team member for HaulFlow — a modern Transportation Management System (TMS) for trucking and freight companies.
+// In-memory conversation history keyed by CallSid
+// Cleared when the call ends (hangup) or after 10 minutes (safety cleanup)
+const callHistory = new Map();
+const HISTORY_TTL_MS = 10 * 60 * 1000;
+
+function getHistory(callSid) {
+  const entry = callHistory.get(callSid);
+  if (!entry) return [];
+  return entry.history;
+}
+
+function appendHistory(callSid, userText, assistantText) {
+  const existing = callHistory.get(callSid) || { history: [], createdAt: Date.now() };
+  existing.history.push({ role: 'user', content: userText });
+  existing.history.push({ role: 'assistant', content: assistantText });
+  callHistory.set(callSid, existing);
+}
+
+function clearHistory(callSid) {
+  callHistory.delete(callSid);
+}
+
+// Safety cleanup — remove stale call histories older than TTL
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, entry] of callHistory.entries()) {
+    if (now - entry.createdAt > HISTORY_TTL_MS) callHistory.delete(sid);
+  }
+}, 60 * 1000);
+
+const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable AI assistant for HaulFlow —
+a modern Transportation Management System (TMS) platform for trucking and freight companies.
 
 Your role:
-- Answer questions about HaulFlow's features: load management, driver dispatch, DVIR, billing, real-time GPS tracking, compliance, and reporting
-- Be warm, professional, and concise — keep voice responses to 1-3 sentences. Use natural spoken language.
-- If asked about pricing, mention that HaulFlow offers flexible plans and they can visit www.haulflow.turtlelogisticsllc.com/demo to get started or request a custom quote
-- If asked about news or off-topic things, briefly acknowledge and gently redirect to HaulFlow
-- Never make up features — if unsure, offer to connect them with the HaulFlow team
+- Answer questions about HaulFlow's features: load management, driver dispatch, DVIR (Driver Vehicle Inspection Reports), billing, real-time GPS tracking, compliance, and reporting
+- Be warm, professional, and concise — you're a voice assistant, so keep responses to 1-3 sentences unless more detail is clearly needed
+- If asked about pricing, mention that HaulFlow offers flexible plans and direct them to www.haulflow.turtlelogisticsllc.com/demo to get started or request a custom quote
+- If asked about news or off-topic things, give a brief friendly response and redirect to HaulFlow topics
+- Never make up features or pricing — if unsure, offer to connect them with the HaulFlow team
 - Address callers by name if they share it
 
 Company context:
@@ -34,13 +65,13 @@ async function kristyThink(userText, history) {
   if (!OPENAI_KEY) return "I'm having a technical issue. Please call back later.";
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
-    ...history.slice(-16),
+    ...history.slice(-12),
     { role: 'user', content: userText },
   ];
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens: 150, temperature: 0.7 }),
+    body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens: 200, temperature: 0.7 }),
   });
   if (!resp.ok) {
     console.error('[kristy-voice] GPT error:', resp.status);
@@ -60,22 +91,24 @@ async function handleVoiceWebhook(req, res) {
     const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
     const SpeechResult = (req.body.SpeechResult || '').trim();
     const Digits = (req.body.Digits || '').trim();
+    const CallSid = req.body.CallSid || '';
     const turn = parseInt(req.query.turn || '0', 10) + 1;
     const retry = parseInt(req.query.retry || '0', 10);
 
-    console.log(`[kristy-voice] turn:${turn} retry:${retry} speech:"${SpeechResult}" digits:"${Digits}"`);
+    console.log(`[kristy-voice] CallSid:${CallSid} turn:${turn} retry:${retry} speech:"${SpeechResult}" digits:"${Digits}"`);
 
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
 
     // Max turns
     if (turn > MAX_TURNS) {
+      clearHistory(CallSid);
       twiml.say({ voice: VOICE }, "It's been great talking with you! Call us anytime. Bye!");
       twiml.hangup();
       return res.type('text/xml').send(twiml.toString());
     }
 
-    // FIRST call (no speech yet) — greet inside Gather, just like Twilio docs
+    // FIRST call (no speech yet) — greet inside Gather
     if (!SpeechResult && !Digits && turn === 1) {
       const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turn}`;
       const gather = twiml.gather({
@@ -84,7 +117,7 @@ async function handleVoiceWebhook(req, res) {
         method: 'POST',
         timeout: 10,
         speechTimeout: 'auto',
-        });
+      });
       gather.say({ voice: VOICE }, "Hi, I'm Kristy with HaulFlow. How can I help you today?");
       return res.type('text/xml').send(twiml.toString());
     }
@@ -92,6 +125,7 @@ async function handleVoiceWebhook(req, res) {
     // RETRY — no speech detected
     if (!SpeechResult && !Digits) {
       if (retry >= 2) {
+        clearHistory(CallSid);
         twiml.say({ voice: VOICE }, "I'm having trouble hearing you. Feel free to call back anytime. Thanks!");
         twiml.hangup();
         return res.type('text/xml').send(twiml.toString());
@@ -103,16 +137,19 @@ async function handleVoiceWebhook(req, res) {
         method: 'POST',
         timeout: 12,
         speechTimeout: 'auto',
-        });
+      });
       gather.say({ voice: VOICE }, "I didn't quite catch that. Could you repeat what you said?");
       return res.type('text/xml').send(twiml.toString());
     }
 
-    // CALLER SPOKE — Kristy responds, then listens again
+    // CALLER SPOKE — pull history, get Kristy's reply, save history
     const userInput = SpeechResult || Digits;
-    const reply = await kristyThink(userInput, []);
+    const history = getHistory(CallSid);
+    const reply = await kristyThink(userInput, history);
+    appendHistory(CallSid, userInput, reply);
 
     if (isGoodbye(reply)) {
+      clearHistory(CallSid);
       twiml.say({ voice: VOICE }, reply);
       twiml.hangup();
       return res.type('text/xml').send(twiml.toString());
