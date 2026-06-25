@@ -156,6 +156,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true })); // Fix: parse Twilio form-encoded webhooks (SpeechResult)
 
 // ---------------------------------------------------------------------------
 // Rate limiting
