@@ -212,6 +212,16 @@ class CallSession {
     }));
   }
 
+  // Send N milliseconds of mulaw silence to let Twilio settle before real audio
+  sendSilence(ms = 600) {
+    const samples = Math.floor(8000 * ms / 1000);
+    const silence = Buffer.alloc(samples, 0xFF); // 0xFF = silence in mulaw
+    const chunkSize = 160; // 20ms chunks at 8kHz
+    for (let i = 0; i < silence.length; i += chunkSize) {
+      this.sendMedia(silence.slice(i, i + chunkSize));
+    }
+  }
+
   clearAudio() {
     if (this.ws.readyState !== 1) return;
     this.ws.send(JSON.stringify({ event: 'clear', streamSid: this.streamSid }));
@@ -256,6 +266,9 @@ class CallSession {
   }
 
   async greet() {
+    // Silence first — lets Twilio media stream settle, eliminates screech on answer
+    this.sendSilence(700);
+    await new Promise(r => setTimeout(r, 300));
     const greeting = "Hey there, this is Kristy with HaulFlow! How can I help you today?";
     this.abort = new AbortController();
     for await (const chunk of streamTTS(greeting, this.abort.signal)) {
