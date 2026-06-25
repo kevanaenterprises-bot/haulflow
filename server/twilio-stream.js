@@ -262,60 +262,95 @@ class CallSession {
 
   setupDeepgram() {
     if (!DEEPGRAM_KEY) {
-      console.error('[kristy-stream] DEEPGRAM_API_KEY not set');
+      console.error('[kristy-stream] DEEPGRAM_API_KEY not set — cannot transcribe caller');
       return;
     }
     const dg = createClient(DEEPGRAM_KEY);
     this.dgConn = dg.listen.live({
-      model:           'nova-2-phonecall',
-      language:        'en-US',
-      smart_format:    true,
-      interim_results: true,
-      endpointing:     300,   // ms of silence = end of utterance
-      utterance_end_ms: 800,
-      encoding:        'mulaw',
-      sample_rate:     8000,
-      channels:        1,
+      model:            'nova-2-phonecall',
+      language:         'en-US',
+      smart_format:     true,
+      interim_results:  true,
+      endpointing:      300,
+      utterance_end_ms: 1000,
+      encoding:         'mulaw',
+      sample_rate:      8000,
+      channels:         1,
     });
 
-    this.dgConn.addListener(LiveTranscriptionEvents.Open, () => {
-      console.log(`[kristy-stream] ${this.callSid} Deepgram connected — flushing ${this.audioBuffer.length} buffered packets`);
+    // Use string literals as fallback in case enum import is stale
+    const EV_OPEN       = LiveTranscriptionEvents?.Open       || 'open';
+    const EV_TRANSCRIPT = LiveTranscriptionEvents?.Transcript || 'Results';
+    const EV_UTTERANCE  = LiveTranscriptionEvents?.UtteranceEnd || 'UtteranceEnd';
+    const EV_ERROR      = LiveTranscriptionEvents?.Error      || 'error';
+    const EV_CLOSE      = LiveTranscriptionEvents?.Close      || 'close';
+
+    this.dgConn.on(EV_OPEN, () => {
+      console.log(`[kristy-stream] ${this.callSid} Deepgram OPEN — flushing ${this.audioBuffer.length} buffered packets`);
       this.dgReady = true;
-      // Flush any audio that arrived before Deepgram was ready
       for (const chunk of this.audioBuffer) {
         try { this.dgConn.send(chunk); } catch { /* ignore */ }
       }
       this.audioBuffer = [];
-      // Keepalive every 8s to prevent timeout
       this.keepAlive = setInterval(() => {
         try { this.dgConn.keepAlive(); } catch { /* ignore */ }
       }, 8000);
     });
 
-    this.dgConn.addListener(LiveTranscriptionEvents.Transcript, (data) => {
+    // Debounce: accumulate is_final transcripts, respond after 600ms silence
+    let pendingTranscript = '';
+    let debounceTimer = null;
+
+    const triggerRespond = () => {
+      const text = pendingTranscript.trim();
+      pendingTranscript = '';
+      debounceTimer = null;
+      if (text.length > 1 && !this.responding) {
+        console.log(`[kristy-stream] ${this.callSid} responding to: "${text}"`);
+        this.respond(text);
+      }
+    };
+
+    this.dgConn.on(EV_TRANSCRIPT, (data) => {
       const alt = data.channel?.alternatives?.[0];
       const transcript = alt?.transcript?.trim();
+      console.log(`[kristy-stream] transcript is_final:${data.is_final} speech_final:${data.speech_final} text:"${transcript}"`);
       if (!transcript) return;
 
-      // Barge-in: caller speaks while Kristy is responding
+      // Barge-in while Kristy is speaking
       if (this.responding && data.is_final) {
-        console.log(`[kristy-stream] ${this.callSid} barge-in: "${transcript}"`);
         this.interrupt();
       }
 
-      // Final transcript with speech endpoint = respond
-      if (data.is_final && data.speech_final && transcript.length > 1) {
-        this.respond(transcript);
+      if (data.is_final) {
+        pendingTranscript += (pendingTranscript ? ' ' : '') + transcript;
+        // speech_final = immediate trigger; otherwise debounce 600ms
+        if (data.speech_final) {
+          if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+          triggerRespond();
+        } else {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(triggerRespond, 600);
+        }
       }
     });
 
-    this.dgConn.addListener(LiveTranscriptionEvents.Error, (err) => {
-      console.error('[kristy-stream] Deepgram error:', err);
+    // UtteranceEnd = Deepgram's secondary end-of-speech signal — fire if we have text
+    this.dgConn.on(EV_UTTERANCE, () => {
+      console.log(`[kristy-stream] ${this.callSid} UtteranceEnd received`);
+      if (pendingTranscript.trim().length > 1) {
+        if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+        triggerRespond();
+      }
     });
 
-    this.dgConn.addListener(LiveTranscriptionEvents.Close, () => {
+    this.dgConn.on(EV_ERROR, (err) => {
+      console.error('[kristy-stream] Deepgram error:', JSON.stringify(err));
+    });
+
+    this.dgConn.on(EV_CLOSE, () => {
       if (this.keepAlive) { clearInterval(this.keepAlive); this.keepAlive = null; }
-      console.log(`[kristy-stream] ${this.callSid} Deepgram closed`);
+      console.log(`[kristy-stream] ${this.callSid} Deepgram CLOSED`);
     });
   }
 
