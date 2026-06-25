@@ -187,14 +187,16 @@ async function* streamLLM(userText, history, systemPrompt, abortSignal) {
 // ---------------------------------------------------------------------------
 class CallSession {
   constructor(ws) {
-    this.ws        = ws;
-    this.streamSid = null;
-    this.callSid   = null;
-    this.history   = [];
-    this.responding = false;
-    this.abort     = null; // AbortController for current response
-    this.dgConn    = null; // Deepgram live connection
-    this.keepAlive = null;
+    this.ws          = ws;
+    this.streamSid   = null;
+    this.callSid     = null;
+    this.history     = [];
+    this.responding  = false;
+    this.abort       = null; // AbortController for current response
+    this.dgConn      = null; // Deepgram live connection
+    this.dgReady     = false; // true once Deepgram WS is open
+    this.audioBuffer = [];   // buffer audio until Deepgram is ready
+    this.keepAlive   = null;
   }
 
   sendMedia(audioBytes) {
@@ -277,7 +279,13 @@ class CallSession {
     });
 
     this.dgConn.addListener(LiveTranscriptionEvents.Open, () => {
-      console.log(`[kristy-stream] ${this.callSid} Deepgram connected`);
+      console.log(`[kristy-stream] ${this.callSid} Deepgram connected — flushing ${this.audioBuffer.length} buffered packets`);
+      this.dgReady = true;
+      // Flush any audio that arrived before Deepgram was ready
+      for (const chunk of this.audioBuffer) {
+        try { this.dgConn.send(chunk); } catch { /* ignore */ }
+      }
+      this.audioBuffer = [];
       // Keepalive every 8s to prevent timeout
       this.keepAlive = setInterval(() => {
         try { this.dgConn.keepAlive(); } catch { /* ignore */ }
@@ -390,12 +398,15 @@ export function registerTwilioStreamRoutes(app, httpServer) {
           console.log(`[kristy-stream] Call started: ${session.callSid}`);
           break;
 
-        case 'media':
-          if (session.dgConn) {
-            const audio = Buffer.from(msg.media.payload, 'base64');
-            session.dgConn.send(audio);
+        case 'media': {
+          const audio = Buffer.from(msg.media.payload, 'base64');
+          if (session.dgReady && session.dgConn) {
+            try { session.dgConn.send(audio); } catch (e) { console.warn('[kristy-stream] dgConn.send error:', e.message); }
+          } else {
+            session.audioBuffer.push(audio); // buffer until Deepgram is open
           }
           break;
+        }
 
         case 'stop':
           session.cleanup();
