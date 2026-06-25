@@ -29,6 +29,7 @@ HaulFlow product knowledge:
     * Growing Fleet (up to 50 trucks): $500/month
     * Larger fleets: invite them to reach out at www.haulflow.turtlelogisticsllc.com/demo for a custom quote
   No contracts or hidden fees — HaulFlow is priced for the small carrier, not the mega-fleet
+- Onboarding: fully self-service — most carriers are up and running within a couple of hours. No lengthy implementation, no waiting on a consultant.
 - Target customers: owner-operators, small fleets, mid-size carriers, freight brokers
 
 Voice and personality guidelines:
