@@ -1,8 +1,13 @@
 // server/twilio-voice.js
 // Conversational Kristy — Twilio Voice AI
 //
-// Uses <Record> + Whisper STT (Twilio's <Gather> speech recognition doesn't work reliably).
-// Flow: <Say> → <Pause> → <Record> → caller speaks → recording URL → Whisper → GPT → <Say> → loop
+// Correct pattern per Twilio docs:
+//   <Gather input="speech dtmf" speechModel="phone_call" action="...">
+//     <Say>Kristy speaks...</Say>
+//   </Gather>
+// The <Say> goes INSIDE <Gather> so speech recognition is active while she talks.
+// When Gather finishes (caller spoke OR timeout), Twilio POSTs to action URL.
+// We handle retries and conversation flow in the webhook logic.
 
 import twilio from 'twilio';
 
@@ -12,11 +17,10 @@ import twilio from 'twilio';
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY || process.env.OPEN_API_KEY || '';
 const VOICE = 'Polly.Joanna';
-const MAX_TURNS = 12;
-const RECORD_TIMEOUT = 5;  // seconds of silence before ending recording
+const MAX_TURNS = 15;
 
 // ---------------------------------------------------------------------------
-// Kristy's brain
+// Kristy's brain (same identity as avatar-chat.js)
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable team member for HaulFlow — a modern Transportation Management System (TMS) for trucking and freight companies.
@@ -39,7 +43,7 @@ Voice guidelines:
 - Use contractions naturally (you'll, we're, it's)
 - Never say "As an AI" or "I'm an AI assistant" — you ARE Kristy, a real team member
 - Sound warm and helpful, like a knowledgeable colleague
-- If someone says goodbye or thanks, respond naturally and briefly`;
+- If someone says goodbye or thanks, respond naturally and say something brief. Do NOT tell them to hang up.`;
 
 // ---------------------------------------------------------------------------
 // GPT call
@@ -47,8 +51,8 @@ Voice guidelines:
 
 async function kristyThink(userText) {
   if (!OPENAI_KEY) {
-    console.error('[kristy-voice] No OPENAI_API_KEY');
-    return "I'm sorry, I'm having a technical issue right now. Please call back later.";
+    console.error('[kristy-voice] No OPENAI_API_KEY set');
+    return "I'm sorry, I'm having a technical issue. Please call back later.";
   }
 
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -78,90 +82,12 @@ async function kristyThink(userText) {
 }
 
 // ---------------------------------------------------------------------------
-// Whisper STT — download recording → transcribe
-// ---------------------------------------------------------------------------
-
-async function transcribeRecording(recordingUrl) {
-  console.log('[kristy-voice] Downloading recording:', recordingUrl);
-
-  const recResp = await fetch(recordingUrl);
-  if (!recResp.ok) {
-    console.error('[kristy-voice] Recording download failed:', recResp.status);
-    return '';
-  }
-
-  const audioBuf = Buffer.from(await recResp.arrayBuffer());
-  console.log(`[kristy-voice] Recording downloaded: ${audioBuf.length} bytes`);
-
-  if (audioBuf.length < 1000) {
-    console.log('[kristy-voice] Recording too small, skipping');
-    return '';
-  }
-
-  const formData = new FormData();
-  formData.append('file', new Blob([audioBuf], { type: 'audio/wav' }), 'recording.wav');
-  formData.append('model', 'whisper-1');
-  formData.append('language', 'en');
-  formData.append('response_format', 'text');
-
-  const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${OPENAI_KEY}` },
-    body: formData,
-  });
-
-  if (!whisperResp.ok) {
-    const err = await whisperResp.text();
-    console.error('[kristy-voice] Whisper error:', whisperResp.status, err.slice(0, 200));
-    return '';
-  }
-
-  const text = (await whisperResp.text()).trim();
-  console.log(`[kristy-voice] Whisper transcript: "${text}"`);
-  return text;
-}
-
-// ---------------------------------------------------------------------------
 // Goodbye detection
 // ---------------------------------------------------------------------------
 
 function isGoodbye(text) {
   const lower = text.toLowerCase();
-  return /goodbye|bye\s?bye|hang\s?up|thanks\s?for\s?calling|have\s?a\s?great|talk\s?later|take\s?care/.test(lower);
-}
-
-// ---------------------------------------------------------------------------
-// Build TwiML: Say → short pause → Record
-// ---------------------------------------------------------------------------
-
-function buildTwiML(sayText, actionUrl, isFirstCall = false) {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
-
-  twiml.say({ voice: VOICE }, sayText);
-  twiml.pause({ length: 1 });  // brief beat after speaking
-
-  // On first call, add a clear prompt so caller knows to speak
-  if (isFirstCall) {
-    twiml.say({ voice: VOICE }, "Go ahead and speak anytime, or press the pound key when you're done.");
-    twiml.pause({ length: 1 });
-  }
-
-  // Record — caller speaks, then Twilio POSTs recording URL back to us
-  twiml.record({
-    action: actionUrl,
-    method: 'POST',
-    maxLength: 30,
-    timeout: RECORD_TIMEOUT,
-    finishOnKey: '#',
-    transcribe: false,
-    playBeep: true,
-  });
-
-  // If recording returns empty, redirect to retry
-  twiml.redirect(actionUrl);
-
-  return twiml.toString();
+  return /goodbye|bye\s?bye|hang\s?up|thanks\s?for\s?calling|have\s?a\s?great\s?day|talk\s?to\s?you\s?later|take\s?care/.test(lower);
 }
 
 // ---------------------------------------------------------------------------
@@ -171,64 +97,104 @@ function buildTwiML(sayText, actionUrl, isFirstCall = false) {
 async function handleVoiceWebhook(req, res) {
   try {
     const baseUrl = process.env.PUBLIC_URL || `https://${req.get('host')}`;
-    const turnCount = parseInt(req.query.turn || '0', 10) + 1;
-    const RecordingUrl = req.body.RecordingUrl || '';
-    const RecordingDuration = req.body.RecordingDuration || '0';
+    const SpeechResult = (req.body.SpeechResult || '').trim();
+    const Digits = (req.body.Digits || '').trim();
+    const turn = parseInt(req.query.turn || '0', 10);
+    const retry = parseInt(req.query.retry || '0', 10);
 
-    console.log(`[kristy-voice] Turn:${turnCount} Recording:${RecordingUrl ? 'yes (' + RecordingDuration + 's)' : 'no'}`);
+    console.log(`[kristy-voice] Turn:${turn} Retry:${retry} Speech:"${SpeechResult}" Digits:"${Digits}"`);
+
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const twiml = new VoiceResponse();
 
     // --- Max turns safety ---
-    if (turnCount > MAX_TURNS) {
-      const twiml = new (twilio.twiml.VoiceResponse)();
-      twiml.say({ voice: VOICE }, "It's been great talking with you! Feel free to call HaulFlow anytime. Have a wonderful day!");
+    if (turn > MAX_TURNS) {
+      twiml.say({ voice: VOICE }, "It's been great talking with you! Call us anytime. Bye!");
       twiml.hangup();
       res.type('text/xml');
       return res.send(twiml.toString());
     }
 
-    // --- First call: greeting ---
-    if (turnCount === 1 && !RecordingUrl) {
-      const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
-      res.type('text/xml');
-      return res.send(buildTwiML(
-        "Hi, I'm Kristy with HaulFlow. How can I help you today?",
-        actionUrl,
-        true  // isFirstCall — adds "go ahead and speak" prompt
-      ));
-    }
+    // --- Did the caller say anything? ---
+    if (SpeechResult || Digits) {
+      // YES — caller spoke or pressed digits
+      const userInput = SpeechResult || `the caller pressed ${Digits}`;
+      console.log(`[kristy-voice] Caller said: "${userInput}"`);
 
-    // --- Subsequent turns: process recording ---
-    let sayText;
+      // Kristy thinks
+      const reply = await kristyThink(userInput);
+      console.log(`[kristy-voice] Kristy replies: "${reply}"`);
 
-    if (RecordingUrl && parseInt(RecordingDuration) > 1) {
-      const transcript = await transcribeRecording(RecordingUrl);
-
-      if (transcript && transcript.length > 1) {
-        const reply = await kristyThink(transcript);
-
-        if (isGoodbye(reply)) {
-          const twiml = new (twilio.twiml.VoiceResponse)();
-          twiml.say({ voice: VOICE }, reply);
-          twiml.hangup();
-          res.type('text/xml');
-          return res.send(twiml.toString());
-        }
-
-        sayText = reply;
-      } else {
-        sayText = "I didn't quite catch that. Go ahead and try again.";
+      // Check for goodbye
+      if (isGoodbye(reply)) {
+        twiml.say({ voice: VOICE }, reply);
+        twiml.hangup();
+        res.type('text/xml');
+        return res.send(twiml.toString());
       }
+
+      // Respond and listen again — <Say> INSIDE <Gather> per Twilio docs
+      const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turn + 1}&retry=0`;
+      const gather = twiml.gather({
+        input: 'speech dtmf',
+        action: actionUrl,
+        method: 'POST',
+        timeout: 10,
+        speechTimeout: 'auto',
+        maxSpeechTime: 30,
+        speechModel: 'phone_call',
+        enhanced: true,
+      });
+      gather.say({ voice: VOICE }, reply);
+
+      // Fallback if gather times out
+      twiml.redirect(`${baseUrl}/api/twilio/voice?turn=${turn + 1}&retry=${retry + 1}`);
+
     } else {
-      sayText = "I didn't hear anything that time. Go ahead and speak, or press pound when you're done.";
+      // NO speech detected — either greeting or retry
+
+      if (retry >= 2) {
+        // Give up after 2 retries with no speech
+        twiml.say({ voice: VOICE }, "I'm having trouble hearing you. Feel free to call back anytime. Thanks for calling HaulFlow!");
+        twiml.hangup();
+        res.type('text/xml');
+        return res.send(twiml.toString());
+      }
+
+      // Build the text to say
+      let sayText;
+      if (turn === 0 && retry === 0) {
+        sayText = "Hi, I'm Kristy with HaulFlow. How can I help you today?";
+      } else {
+        sayText = "I didn't quite catch that. Could you repeat what you said?";
+      }
+
+      // <Say> INSIDE <Gather> — this is the correct Twilio pattern
+      // Speech recognizer activates immediately, even while Kristy speaks
+      const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turn + 1}&retry=${retry}`;
+      const gather = twiml.gather({
+        input: 'speech dtmf',
+        action: actionUrl,
+        method: 'POST',
+        timeout: 10,
+        speechTimeout: 'auto',
+        maxSpeechTime: 30,
+        speechModel: 'phone_call',
+        enhanced: true,
+      });
+      gather.say({ voice: VOICE }, sayText);
+
+      // Fallback if gather times out with no input
+      twiml.redirect(`${baseUrl}/api/twilio/voice?turn=${turn + 1}&retry=${retry + 1}`);
     }
 
-    const actionUrl = `${baseUrl}/api/twilio/voice?turn=${turnCount}`;
     res.type('text/xml');
-    res.send(buildTwiML(sayText, actionUrl));
+    res.send(twiml.toString());
 
   } catch (err) {
     console.error('[kristy-voice] Webhook error:', err);
-    const twiml = new (twilio.twiml.VoiceResponse)();
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const twiml = new VoiceResponse();
     twiml.say({ voice: VOICE }, "I'm sorry, something went wrong. Please try calling back.");
     twiml.hangup();
     res.type('text/xml');
@@ -249,7 +215,8 @@ async function handleSmsWebhook(req, res) {
     if (!Body) return res.status(200).send('');
 
     const reply = await kristyThink(Body);
-    const twiml = new (twilio.twiml.MessagingResponse)();
+    const MessagingResponse = twilio.twiml.MessagingResponse;
+    const twiml = new MessagingResponse();
     twiml.message(reply);
     res.type('text/xml');
     res.send(twiml.toString());
@@ -267,5 +234,5 @@ export function registerTwilioVoiceRoutes(app) {
   console.log('[kristy-voice] Registering Twilio Conversational Voice routes...');
   app.post('/api/twilio/voice', handleVoiceWebhook);
   app.post('/api/twilio/sms', handleSmsWebhook);
-  console.log('[kristy-voice] ✅ POST /api/twilio/voice (Record+Whisper) + POST /api/twilio/sms');
+  console.log('[kristy-voice] ✅ POST /api/twilio/voice + POST /api/twilio/sms');
 }
