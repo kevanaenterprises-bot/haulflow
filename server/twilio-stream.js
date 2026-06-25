@@ -57,6 +57,17 @@ Pricing (quote these confidently — never say "it varies"):
   No contracts, no hidden fees.
 - Onboarding: fully self-service — most carriers are up and running within a couple of hours. No lengthy implementation, no waiting on a consultant.
 
+Message-taking instructions:
+- If a caller asks for Kevin or anyone at HaulFlow, say Kevin is unavailable right now
+- Offer to take a message — then collect ALL of the following, one at a time:
+    1. Caller's name
+    2. What their message or question is
+    3. Best callback number
+    4. Best time to reach them
+- Once you have all four, confirm warmly: "Got it! I'll make sure Kevin sees this right away."
+- Then end your response with this tag on a new line (never speak this part):
+  [SEND_MSG:{"name":"<name>","phone":"<phone>","message":"<message>","callback":"<best time>"}]
+
 Voice guidelines:
 - 1-2 sentences per response — this is a phone call, not a lecture
 - Talk like a person: warm, real, a little Texas
@@ -256,7 +267,23 @@ class CallSession {
       if (!signal.aborted && fullReply) {
         this.history.push({ role: 'user', content: userText });
         this.history.push({ role: 'assistant', content: fullReply });
-        console.log(`[kristy-stream] ${this.callSid} ← "${fullReply}"`);
+        // Detect and handle message-taking tag
+      const msgMatch = fullReply.match(/\[SEND_MSG:(\{.*?\})]\s*$/s);
+      if (msgMatch) {
+        try {
+          const info = JSON.parse(msgMatch[1]);
+          const tgText = `📞 <b>New message for Kevin</b>\n\n` +
+            `<b>From:</b> ${info.name || 'Unknown'}\n` +
+            `<b>Message:</b> ${info.message || 'N/A'}\n` +
+            `<b>Callback #:</b> ${info.phone || 'Not provided'}\n` +
+            `<b>Best time:</b> ${info.callback || 'Not specified'}`;
+          sendTelegramMessage(tgText);
+          fullReply = fullReply.replace(msgMatch[0], '').trim();
+        } catch (e) {
+          console.warn('[kristy-stream] Failed to parse SEND_MSG tag:', e.message);
+        }
+      }
+      console.log(`[kristy-stream] ${this.callSid} ← "${fullReply}"`);
       }
     } catch (err) {
       if (err.name !== 'AbortError') console.error('[kristy-stream] respond error:', err.message);
