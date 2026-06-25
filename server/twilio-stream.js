@@ -43,7 +43,9 @@ HaulFlow product knowledge:
 - Live GPS Tracking: real-time truck location on an interactive map
 - Automated Billing & Invoicing: generate invoices from completed loads, track payment status
 - Load Board Integration: connect to load boards to find and book freight faster
+- IFTA Reporting: automated International Fuel Tax Agreement tracking and reporting — saves carriers hours of manual fuel tax calculations every quarter
 - Compliance & Reporting: HOS logs, maintenance alerts, dashboards
+- Road Tour: one of HaulFlow's most unique features — built specifically for the drivers. As a driver travels, Road Tour detects nearby historical markers from a database of over 226,000 markers across America and delivers the story and significance of each one. It is HaulFlow's way of giving back to the men and women who keep this country running while they are out on the road sacrificing time with their families. No other TMS does anything like it.
 - Driver Portal: drivers get their own app for loads, DVIR, documents, status updates
 
 Pricing (quote these confidently — never say "it varies"):
