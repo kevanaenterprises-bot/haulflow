@@ -109,6 +109,31 @@ async function getSystemPrompt() {
 fetchNews().then(h => { newsCache.headlines = h; newsCache.fetchedAt = Date.now(); });
 
 // ---------------------------------------------------------------------------
+// Telegram — Kevin Owen is the only authorized recipient
+// ---------------------------------------------------------------------------
+const KEVIN_CHAT_ID = '5616521950';
+const KEVIN_NAME    = 'Kevin Owen';
+const TG_BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN || '8810827019:AAEQ8Sx4UD5zyHCVanEBeqyxHG2EPdxKY7E';
+
+async function sendTelegramMessage(text) {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: KEVIN_CHAT_ID, text, parse_mode: 'HTML' }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      console.log(`[kristy-stream] Telegram delivered to ${KEVIN_NAME}`);
+    } else {
+      console.error('[kristy-stream] Telegram error:', data.description);
+    }
+  } catch (err) {
+    console.error('[kristy-stream] Telegram error:', err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // ElevenLabs streaming TTS — outputs ulaw_8000 (exactly what Twilio wants)
 // ---------------------------------------------------------------------------
 async function* streamTTS(text, abortSignal) {
