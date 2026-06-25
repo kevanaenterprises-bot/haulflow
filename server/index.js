@@ -11,7 +11,7 @@ import rateLimit from 'express-rate-limit';
 import { registerDvirRoutes } from './dvir-routes.js';
 import { registerDemoRoutes } from './demo-routes.js';
 import { registerDriverAuthRoutes } from './driver-auth-routes.js';
-import { registerTwilioVoiceRoutes } from './twilio-voice.js';
+import { registerTwilioStreamRoutes } from './twilio-stream.js';
 
 const { Pool } = pg;
 
@@ -1636,7 +1636,7 @@ runMigrations().then(async () => {
   });
 
   // Register Twilio Conversational Voice (Kristy)
-  registerTwilioVoiceRoutes(app);
+  registerTwilioStreamRoutes(app, server);
 });
 // deploy trigger
 // v2 deploy trigger Mon Jun 22 23:08:23 UTC 2026
