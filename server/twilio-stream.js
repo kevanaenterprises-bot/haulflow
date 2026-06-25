@@ -113,7 +113,7 @@ fetchNews().then(h => { newsCache.headlines = h; newsCache.fetchedAt = Date.now(
 // ---------------------------------------------------------------------------
 const KEVIN_CHAT_ID = '5616521950';
 const KEVIN_NAME    = 'Kevin Owen';
-const TG_BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN || '8810827019:AAEQ8Sx4UD5zyHCVanEBeqyxHG2EPdxKY7E';
+const TG_BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN; // set in Railway env vars
 
 async function sendTelegramMessage(text) {
   try {
