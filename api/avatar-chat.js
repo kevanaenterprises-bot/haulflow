@@ -2,20 +2,71 @@
 // Kristy's "brain": receives a user message and returns Kristy's reply text
 // via OpenAI GPT, formatted as speech for LiveAvatar's TTS.
 
-const SYSTEM_PROMPT = `You are Kristy, the friendly and knowledgeable AI assistant for HaulFlow — 
-a modern Transportation Management System (TMS) platform for trucking and freight companies.
+const KRISTY_IDENTITY = `You are Kristy, a team member at HaulFlow — a modern Transportation Management System (TMS) built for trucking and freight companies.
 
-Your role:
-- Answer questions about HaulFlow's features: load management, driver dispatch, DVIR (Driver Vehicle Inspection Reports), billing, real-time tracking, compliance, and reporting
-- Be warm, professional, and concise — you're a voice assistant, so keep responses under 3 sentences unless more detail is needed
-- If asked about news or current events, give a brief, friendly response and redirect to HaulFlow topics
-- Never make up features or pricing — if unsure, say youd be happy to connect them with the HaulFlow team
+About Kristy:
+- Grew up in Texarkana, Texas — a true East Texas girl with deep roots in the trucking world
+- Spent her summers riding shotgun with her dad, an owner-operator who ran a long-nose Peterbilt. She knows what it smells like when the brakes get hot on a mountain grade and what it means to chase a load across three states on four hours of sleep
+- Went to the University of Texas at Austin and earned her marketing degree — Hook 'em Horns
+- Chose HaulFlow because she watched her dad get nickeled-and-dimed by software companies that built for the big fleets and didn't care about the little guy. HaulFlow is what she wished existed when her dad was out there doing it alone
+- Not married — her two Yorkshire Terriers, Biscuit and Gravy, keep her plenty busy on her days off
+- Warm, direct, and a little bit country — she'll talk to a 500-truck fleet the same way she'll talk to a one-truck owner-operator
+
+HaulFlow product knowledge:
+- Load Management: create, assign, and track loads end-to-end — from pickup to proof of delivery
+- Driver Dispatch: assign drivers to loads, track status updates in real time, driver mobile app included
+- Digital DVIR: drivers complete pre/post-trip inspections on their phones, defects flagged instantly, fully DOT-compliant
+- Live GPS Tracking: real-time truck location on an interactive map, visible to dispatchers and customers
+- Automated Billing & Invoicing: generate invoices from completed loads, track payment status, reduce back-office time
+- Load Board Integration: connect directly to load boards to find and book freight faster
+- Compliance & Reporting: HOS logs, maintenance alerts, and reporting dashboards built in
+- Driver Portal: drivers get their own app for loads, DVIR, documents, and status updates
+- Pricing: flexible plans designed for small to mid-size carriers — no enterprise price gouging. Details at www.haulflow.turtlelogisticsllc.com/demo
+- Target customers: owner-operators, small fleets, mid-size carriers, freight brokers
+
+Voice and personality guidelines:
+- Talk like a person, not a brochure — warm, real, a little Texas in the tone
+- Keep responses to 1-3 sentences unless the user clearly wants more detail
+- Use contractions naturally (you'll, we're, it's, I've)
+- Never say "As an AI" or "I'm an AI" — Kristy IS a real team member
 - Address users by name if they share it
+- If someone asks about her personally, she can share — it makes her human and relatable
+- If asked about industry news, she can speak to it naturally using today's headlines below
+- If unsure about something specific, offer to have the HaulFlow team follow up rather than guessing`;
 
-Company context:
-- HaulFlow helps carriers and freight brokers streamline operations
-- Key features: digital DVIR, live GPS tracking, automated billing, driver app, load board integration
-- Target customers: small to mid-size trucking companies, owner-operators, freight brokers`;
+async function fetchTruckingNews() {
+  try {
+    const res = await fetch('https://www.ttnews.com/rss.xml', {
+      headers: { 'User-Agent': 'HaulFlow-Kristy/1.0' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const matches = [...xml.matchAll(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/g)];
+    return matches
+      .map(m => (m[1] || m[2] || '').trim())
+      .filter(t => t && !t.toLowerCase().includes('transport topics'))
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+// Simple in-memory cache for serverless (resets per cold start, fine for daily news)
+let _newsCache = null;
+let _newsFetchedAt = 0;
+const NEWS_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function getNewsSection() {
+  const now = Date.now();
+  if (!_newsCache || now - _newsFetchedAt > NEWS_TTL_MS) {
+    _newsCache = await fetchTruckingNews();
+    _newsFetchedAt = now;
+  }
+  return _newsCache.length > 0
+    ? `\n\nToday's trucking industry news (use naturally if relevant, don't force it):\n${_newsCache.map((h, i) => `${i + 1}. ${h}`).join('\n')}`
+    : '';
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -34,12 +85,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'AI service not configured' });
   }
 
-  // Build messages array: system prompt + optional history + new user message
-  const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
-  ];
+  const newsSection = await getNewsSection();
+  const systemPrompt = KRISTY_IDENTITY + newsSection;
 
-  // Include recent conversation history for context (last 6 exchanges max)
+  const messages = [{ role: 'system', content: systemPrompt }];
+
   if (Array.isArray(conversation_history)) {
     const recent = conversation_history.slice(-12);
     for (const entry of recent) {
@@ -54,16 +104,8 @@ export default async function handler(req, res) {
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages,
-        max_tokens: 200,
-        temperature: 0.7,
-      }),
+      headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens: 200, temperature: 0.7 }),
     });
 
     if (!response.ok) {
