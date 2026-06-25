@@ -84,8 +84,7 @@ async function handleVoiceWebhook(req, res) {
         method: 'POST',
         timeout: 10,
         speechTimeout: 'auto',
-        maxSpeechTime: 30,
-      });
+        });
       gather.say({ voice: VOICE }, "Hi, I'm Kristy with HaulFlow. How can I help you today?");
       return res.type('text/xml').send(twiml.toString());
     }
@@ -104,8 +103,7 @@ async function handleVoiceWebhook(req, res) {
         method: 'POST',
         timeout: 12,
         speechTimeout: 'auto',
-        maxSpeechTime: 30,
-      });
+        });
       gather.say({ voice: VOICE }, "I didn't quite catch that. Could you repeat what you said?");
       return res.type('text/xml').send(twiml.toString());
     }
@@ -127,7 +125,6 @@ async function handleVoiceWebhook(req, res) {
       method: 'POST',
       timeout: 10,
       speechTimeout: 'auto',
-      maxSpeechTime: 30,
     });
     gather.say({ voice: VOICE }, reply);
 
