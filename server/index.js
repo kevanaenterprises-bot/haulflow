@@ -1,4 +1,4 @@
-// server/index.js — HaulFlow API Server
+// server/index.js â HaulFlow API Server
 // Express backend for HaulFlow TMS (Transportation Management System)
 
 import express from 'express';
@@ -22,7 +22,7 @@ const PORT = process.env.PORT || 3001;
 // ---------------------------------------------------------------------------
 // JWT config
 // ---------------------------------------------------------------------------
-// JWT secret — set JWT_SECRET env var in production. Falls back to a deterministic
+// JWT secret â set JWT_SECRET env var in production. Falls back to a deterministic
 // hash so tokens survive server restarts (not random per-start).
 const JWT_SECRET = process.env.JWT_SECRET || (() => {
   // Stable fallback: derive from DATABASE_URL so it's unique per deployment
@@ -210,7 +210,7 @@ function driverAuthMiddleware(req, res, next) {
   }
 }
 
-// Admin auth — simple password-based, separate from tenant auth
+// Admin auth â simple password-based, separate from tenant auth
 function adminAuthMiddleware(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
@@ -232,7 +232,7 @@ function adminAuthMiddleware(req, res, next) {
   }
 }
 
-// POST /api/admin/login — platform admin login
+// POST /api/admin/login â platform admin login
 app.post('/api/admin/login', async (req, res) => {
   try {
     const { password } = req.body || {};
@@ -253,7 +253,7 @@ app.post('/api/admin/login', async (req, res) => {
   }
 });
 
-// GET /api/admin/customers — list all companies with subscription info
+// GET /api/admin/customers â list all companies with subscription info
 app.get('/api/admin/customers', adminAuthMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -293,7 +293,7 @@ app.get('/api/admin/customers', adminAuthMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/admin/stats — platform-wide stats
+// GET /api/admin/stats â platform-wide stats
 app.get('/api/admin/stats', adminAuthMiddleware, async (_req, res) => {
   try {
     const total = await pool.query('SELECT COUNT(*)::int AS count FROM companies');
@@ -326,7 +326,7 @@ app.get('/api/admin/stats', adminAuthMiddleware, async (_req, res) => {
 // Platform error logging & activity feed
 // ---------------------------------------------------------------------------
 
-// Error logging middleware — captures API errors across the platform
+// Error logging middleware â captures API errors across the platform
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${req.method} ${req.path}: ${err.message}`);
   // Log to DB async (fire-and-forget)
@@ -350,7 +350,7 @@ async function logActivity(type, detail, companyId) {
   } catch {}
 }
 
-// GET /api/admin/errors — recent platform errors
+// GET /api/admin/errors â recent platform errors
 app.get('/api/admin/errors', adminAuthMiddleware, async (req, res) => {
   try {
     const since = req.query.since; // optional ISO timestamp
@@ -368,7 +368,7 @@ app.get('/api/admin/errors', adminAuthMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/admin/errors — clear error log
+// DELETE /api/admin/errors â clear error log
 app.delete('/api/admin/errors', adminAuthMiddleware, async (_req, res) => {
   try {
     await pool.query('DELETE FROM platform_errors');
@@ -382,7 +382,7 @@ app.delete('/api/admin/errors', adminAuthMiddleware, async (_req, res) => {
 // Visitor tracking
 // ---------------------------------------------------------------------------
 
-// POST /api/track-visit — called by the demo page to log a visit
+// POST /api/track-visit â called by the demo page to log a visit
 app.post('/api/track-visit', async (req, res) => {
   try {
     const ip = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
@@ -422,7 +422,7 @@ app.post('/api/track-visit', async (req, res) => {
   }
 });
 
-// GET /api/admin/visitors — visitor analytics for admin dashboard
+// GET /api/admin/visitors â visitor analytics for admin dashboard
 app.get('/api/admin/visitors', adminAuthMiddleware, async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
@@ -457,7 +457,7 @@ app.get('/api/admin/visitors', adminAuthMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/admin/activity — recent platform activity (signups, payments, errors)
+// GET /api/admin/activity â recent platform activity (signups, payments, errors)
 app.get('/api/admin/activity', adminAuthMiddleware, async (req, res) => {
   try {
     const since = req.query.since; // optional ISO timestamp
@@ -475,7 +475,7 @@ app.get('/api/admin/activity', adminAuthMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/admin/health — deep platform health check
+// GET /api/admin/health â deep platform health check
 app.get('/api/admin/health', adminAuthMiddleware, async (_req, res) => {
   try {
     const checks = {};
@@ -582,7 +582,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Password reset — forgot password (send email with reset link)
+// Password reset â forgot password (send email with reset link)
 // ---------------------------------------------------------------------------
 const resetLimiter = rateLimit({ windowMs: 60_000, max: 3 });
 
@@ -594,6 +594,9 @@ function getMailTransporter() {
     host: process.env.MAIL_HOST || 'smtp-mail.outlook.com',
     port: Number(process.env.MAIL_PORT) || 587,
     secure: false,
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 10000,
     auth: { user: mailUser, pass: mailPass },
   });
 }
@@ -632,14 +635,14 @@ app.post('/api/auth/forgot-password', resetLimiter, async (req, res) => {
     const resetUrl = `${process.env.APP_URL || 'https://haulflow.turtlelogisticsllc.com'}/reset-password?token=${token}`;
 
     if (transporter) {
-      await transporter.sendMail({
+      transporter.sendMail({
         from: `"HaulFlow" <${process.env.MAIL_USER}>`,
         to: email,
-        subject: 'HaulFlow — Password Reset',
+        subject: 'HaulFlow â Password Reset',
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a;">
             <div style="background:#1e40af;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0;">
-              <h2 style="margin:0;font-size:18px;">🚛 HaulFlow Password Reset</h2>
+              <h2 style="margin:0;font-size:18px;">ð HaulFlow Password Reset</h2>
             </div>
             <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 10px 10px;">
               <p style="margin:0 0 16px;">Hi ${user.name || 'there'},</p>
@@ -653,10 +656,11 @@ app.post('/api/auth/forgot-password', resetLimiter, async (req, res) => {
               <p style="margin:0;color:#9ca3af;font-size:12px;">If you didn't request this, you can safely ignore this email.</p>
             </div>
           </div>`,
-      });
-      console.log('[AUTH] Password reset email sent to:', email);
+      })
+        .then(() => console.log('[AUTH] Password reset email sent to:', email))
+        .catch(err => console.error('[AUTH] Password reset email failed:', err.message));
     } else {
-      console.warn('[AUTH] Password reset email NOT sent — MAIL_USER/MAIL_PASS not configured');
+      console.warn('[AUTH] Password reset email NOT sent â MAIL_USER/MAIL_PASS not configured');
       console.log('[AUTH] Reset URL would be:', resetUrl);
     }
 
@@ -668,7 +672,7 @@ app.post('/api/auth/forgot-password', resetLimiter, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Password reset — set new password
+// Password reset â set new password
 // ---------------------------------------------------------------------------
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
@@ -713,7 +717,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 // -- Loads --
 
-// Distance estimation (haversine on city centroids — no external API needed)
+// Distance estimation (haversine on city centroids â no external API needed)
 const STATE_ABBR = {
   'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
   'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
@@ -1182,7 +1186,7 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
   }
 });
 // ---------------------------------------------------------------------------
-// Self-Service Onboarding — POST /api/onboard
+// Self-Service Onboarding â POST /api/onboard
 // Creates a new company + admin user, returns auto-login token
 // ---------------------------------------------------------------------------
 app.post('/api/onboard', onboardingLimiter, async (req, res) => {
@@ -1222,7 +1226,7 @@ app.post('/api/onboard', onboardingLimiter, async (req, res) => {
                   await pool.query(
                             `UPDATE companies SET mc_number = $1, dot_number = $2 WHERE id = $3`,
                             [mc_number || null, dot_number || null, company.id]
-                          ).catch(() => {}); // columns may not exist yet — non-fatal
+                          ).catch(() => {}); // columns may not exist yet â non-fatal
           }
 
           // Create admin user
@@ -1243,7 +1247,7 @@ app.post('/api/onboard', onboardingLimiter, async (req, res) => {
           };
           const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
-          console.log(`[ONBOARD] New company created: ${company_name} (${company.id}) — admin: ${admin_email}`);
+          console.log(`[ONBOARD] New company created: ${company_name} (${company.id}) â admin: ${admin_email}`);
 
           res.json({
                   token,
@@ -1266,7 +1270,7 @@ app.post('/api/onboard', onboardingLimiter, async (req, res) => {
     }
 });
 // ---------------------------------------------------------------------------
-// Setup Wizard Complete — POST /api/setup/complete
+// Setup Wizard Complete â POST /api/setup/complete
 // Saves company profile + invoice config from the onboarding wizard
 // Called after Stripe payment, from /setup page
 // ---------------------------------------------------------------------------
@@ -1331,26 +1335,26 @@ const PLANS = {
     requiresAndroid: false,
   },
   'fleet-20': {
-    label: 'Fleet (2–20 trucks)',
+    label: 'Fleet (2â20 trucks)',
     amount: 35000, // $350/mo
     trialDays: 0,
-    description: '2–20 trucks. Full platform. Cancel anytime.',
+    description: '2â20 trucks. Full platform. Cancel anytime.',
     slotLimit: Infinity,
     slotStatus: null,
     requiresAndroid: false,
   },
   'fleet-50': {
-    label: 'Fleet (21–50 trucks)',
+    label: 'Fleet (21â50 trucks)',
     amount: 55000, // $550/mo
     trialDays: 0,
-    description: '21–50 trucks. Full platform. Cancel anytime.',
+    description: '21â50 trucks. Full platform. Cancel anytime.',
     slotLimit: Infinity,
     slotStatus: null,
     requiresAndroid: false,
   },
 };
 
-// GET /api/pricing — returns available tiers with slot counts
+// GET /api/pricing â returns available tiers with slot counts
 app.get('/api/pricing', async (_req, res) => {
   try {
     const tiers = [];
@@ -1384,12 +1388,12 @@ app.get('/api/pricing', async (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// TTS Proxy — ElevenLabs (keeps API key server-side)
+// TTS Proxy â ElevenLabs (keeps API key server-side)
 // ---------------------------------------------------------------------------
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 const ELEVENLABS_VOICES = {
-  female: 'pNInz6obpgDQGcFmaJgB', // Rachel — warm, natural female
-  male:   'TxGEqnHWrfWFTfGW9XjX', // Josh — clear, natural male
+  female: 'pNInz6obpgDQGcFmaJgB', // Rachel â warm, natural female
+  male:   'TxGEqnHWrfWFTfGW9XjX', // Josh â clear, natural male
 };
 
 app.post('/api/tts', async (req, res) => {
@@ -1435,7 +1439,7 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
-// POST /api/create-checkout-session — creates a Stripe Checkout session
+// POST /api/create-checkout-session â creates a Stripe Checkout session
 app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
   try {
     if (!STRIPE_SECRET_KEY) {
@@ -1465,7 +1469,7 @@ app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
       'payment_method_types[]': 'card',
       'mode': 'subscription',
       'line_items[0][price_data][currency]': 'usd',
-      'line_items[0][price_data][product_data][name]': `HaulFlow TMS — ${plan.label}`,
+      'line_items[0][price_data][product_data][name]': `HaulFlow TMS â ${plan.label}`,
       'line_items[0][price_data][product_data][description]': plan.description,
       'line_items[0][price_data][recurring][interval]': 'month',
       'line_items[0][price_data][unit_amount]': String(plan.amount),
@@ -1517,7 +1521,7 @@ app.post('/api/create-checkout-session', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/stripe/webhook — Stripe webhook for payment events
+// POST /api/stripe/webhook â Stripe webhook for payment events
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
@@ -1571,7 +1575,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
         if (!companyId) break;
 
-        // Handle trial ending → subscription going active
+        // Handle trial ending â subscription going active
         if (sub.status === 'active' && !sub.trial_end) {
           await pool.query(
             "UPDATE companies SET subscription_status = 'active' WHERE id = $1",
