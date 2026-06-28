@@ -9,20 +9,12 @@ interface Props {
   onCreated: () => void;
 }
 
-function generateLoadNumber(): string {
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(-2);
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const rand = String(Math.floor(10000 + Math.random() * 90000));
-  return `${yy}${mm}-${rand}`;
-}
-
 export default function CreateLoadModal({ customers: initialCustomers, onClose, onCreated }: Props) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [shippers, setShippers] = useState<Shipper[]>([]);
 
   const [form, setForm] = useState({
-    load_number: generateLoadNumber(), customer_id: '', origin_address: '', origin_city: '', origin_state: '',
+    load_number: '', customer_id: '', origin_address: '', origin_city: '', origin_state: '',
     dest_address: '', dest_city: '', dest_state: '', pickup_date: '', delivery_date: '',
     rate: '', miles: '', cargo_description: '',
   });
@@ -164,8 +156,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
       onCreated();
     } catch (err: any) {
       if (err?.message?.includes('duplicate') || err?.details?.includes('duplicate')) {
-        setError('Load number already exists — a new number was generated. Please try again.');
-        set('load_number', generateLoadNumber());
+                setError('A load with this number already exists in your account. Please check the load number and try again.');
       } else {
         setError(err.message || 'Failed to create load');
       }
@@ -184,7 +175,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Load Number *" value={form.load_number} onChange={v => set('load_number', v)} placeholder="e.g. 375-90001" />
+            <Field label="Load Number *" value={form.load_number} onChange={v => set('load_number', v)} placeholder="Enter shipper's load number" />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
               <div className="flex gap-1">
