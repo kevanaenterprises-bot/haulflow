@@ -60,7 +60,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
         setMilesError('');
       }
     } catch (e: any) {
-      // Silently skip if states aren't recognized â user may still be typing
+      // Silently skip if states aren't recognized -- user may still be typing
       setMilesError('');
     } finally {
       setCalculatingMiles(false);
@@ -181,7 +181,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
               <div className="flex gap-1">
                 <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-                  <option value="">â Select customer â</option>
+                  <option value="">-- Select customer --</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
                 </select>
                 <button
@@ -227,7 +227,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                 {shipperList.length > 0 && !showAddShipper && (
                   <select defaultValue="" onChange={e => { applyShipper(e.target.value); e.target.value = ''; }}
                     className="text-sm border border-brand-300 text-brand-600 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-brand-50">
-                    <option value="" disabled>Select shipper â</option>
+                    <option value="" disabled>Select shipper -></option>
                     {shipperList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
@@ -280,7 +280,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                 {receiverList.length > 0 && !showAddReceiver && (
                   <select defaultValue="" onChange={e => { applyReceiver(e.target.value); e.target.value = ''; }}
                     className="text-sm border border-purple-300 text-purple-600 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-purple-50">
-                    <option value="" disabled>Select receiver â</option>
+                    <option value="" disabled>Select receiver -></option>
                     {receiverList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
@@ -369,7 +369,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
               <div className="flex items-center gap-2">
                 <span>â½</span>
                 <span className="font-medium text-gray-700">Fuel Surcharge</span>
-                <span className="text-xs text-gray-400">(${fsRate.toFixed(3)}/mile Ã {form.miles || '?'} miles)</span>
+                <span className="text-xs text-gray-400">(${fsRate.toFixed(3)}/mile x {form.miles || '?'} miles)</span>
               </div>
               <span className={`font-bold ${fuelSurcharge > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
                 {fuelSurcharge > 0 ? `$${fuelSurcharge.toFixed(2)}` : 'Enter miles'}
