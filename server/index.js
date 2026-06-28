@@ -824,7 +824,7 @@ app.post('/api/loads', authMiddleware, async (req, res) => {
         b.driver_id || null,
         b.origin_address || null, b.origin_city || null, normalizeState(b.origin_state) || null, b.origin_zip || null,
         b.destination_address || null, b.destination_city || null, normalizeState(b.destination_state) || null, b.destination_zip || null,
-        b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'booked',
+        b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'WAITING_DISPATCH',
         b.notes || null, b.weight || null, b.commodity || null, b.miles || null,
       ]
     );
@@ -848,7 +848,7 @@ app.put('/api/loads/:id', authMiddleware, async (req, res) => {
         b.load_number, b.shipper_id || null, b.customer_id || null, b.driver_id || null,
         b.origin_address, b.origin_city, normalizeState(b.origin_state), b.origin_zip,
         b.destination_address, b.destination_city, normalizeState(b.destination_state), b.destination_zip,
-        b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'booked',
+        b.pickup_date || null, b.delivery_date || null, b.rate || 0, b.status || 'WAITING_DISPATCH',
         b.notes || null, b.weight || null, b.commodity || null,
         req.params.id, req.user.company_id,
       ]
