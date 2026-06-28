@@ -869,6 +869,23 @@ app.delete('/api/loads/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/loads/:id/assign — assign driver and dispatch load
+app.post('/api/loads/:id/assign', authMiddleware, async (req, res) => {
+  try {
+    const { driver_id } = req.body;
+    if (!driver_id) return res.status(400).json({ error: 'driver_id is required' });
+    const result = await pool.query(
+      `UPDATE loads SET driver_id = $1, status = 'dispatched'
+       WHERE id = $2 AND company_id = $3 RETURNING *`,
+      [driver_id, req.params.id, req.user.company_id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Load not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to assign driver', details: err.message });
+  }
+});
+
 // -- Drivers --
 app.get('/api/drivers', authMiddleware, async (req, res) => {
   try {
