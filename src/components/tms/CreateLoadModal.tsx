@@ -9,12 +9,20 @@ interface Props {
   onCreated: () => void;
 }
 
+function generateLoadNumber(): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const rand = String(Math.floor(10000 + Math.random() * 90000));
+  return `${yy}${mm}-${rand}`;
+}
+
 export default function CreateLoadModal({ customers: initialCustomers, onClose, onCreated }: Props) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [shippers, setShippers] = useState<Shipper[]>([]);
 
   const [form, setForm] = useState({
-    load_number: '', customer_id: '', origin_address: '', origin_city: '', origin_state: '',
+    load_number: generateLoadNumber(), customer_id: '', origin_address: '', origin_city: '', origin_state: '',
     dest_address: '', dest_city: '', dest_state: '', pickup_date: '', delivery_date: '',
     rate: '', miles: '', cargo_description: '',
   });
@@ -60,7 +68,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
         setMilesError('');
       }
     } catch (e: any) {
-      // Silently skip if states aren't recognized — user may still be typing
+      // Silently skip if states aren't recognized â user may still be typing
       setMilesError('');
     } finally {
       setCalculatingMiles(false);
@@ -155,7 +163,12 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
       });
       onCreated();
     } catch (err: any) {
-      setError(err.message);
+      if (err?.message?.includes('duplicate') || err?.details?.includes('duplicate')) {
+        setError('Load number already exists — a new number was generated. Please try again.');
+        set('load_number', generateLoadNumber());
+      } else {
+        setError(err.message || 'Failed to create load');
+      }
     } finally {
       setLoading(false);
     }
@@ -177,7 +190,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
               <div className="flex gap-1">
                 <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
-                  <option value="">— Select customer —</option>
+                  <option value="">â Select customer â</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
                 </select>
                 <button
@@ -223,7 +236,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                 {shipperList.length > 0 && !showAddShipper && (
                   <select defaultValue="" onChange={e => { applyShipper(e.target.value); e.target.value = ''; }}
                     className="text-sm border border-brand-300 text-brand-600 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-brand-50">
-                    <option value="" disabled>Select shipper →</option>
+                    <option value="" disabled>Select shipper â</option>
                     {shipperList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
@@ -276,7 +289,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                 {receiverList.length > 0 && !showAddReceiver && (
                   <select defaultValue="" onChange={e => { applyReceiver(e.target.value); e.target.value = ''; }}
                     className="text-sm border border-purple-300 text-purple-600 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-purple-50">
-                    <option value="" disabled>Select receiver →</option>
+                    <option value="" disabled>Select receiver â</option>
                     {receiverList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
@@ -334,7 +347,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                   title="Calculate driving distance from addresses"
                 >
                   {calculatingMiles ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                  {calculatingMiles ? 'Calculating…' : 'Calculate'}
+                  {calculatingMiles ? 'Calculatingâ¦' : 'Calculate'}
                 </button>
               </div>
               <div className="relative">
@@ -363,9 +376,9 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
           {fsEnabled && (
             <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${form.miles ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'}`}>
               <div className="flex items-center gap-2">
-                <span>⛽</span>
+                <span>â½</span>
                 <span className="font-medium text-gray-700">Fuel Surcharge</span>
-                <span className="text-xs text-gray-400">(${fsRate.toFixed(3)}/mile × {form.miles || '?'} miles)</span>
+                <span className="text-xs text-gray-400">(${fsRate.toFixed(3)}/mile Ã {form.miles || '?'} miles)</span>
               </div>
               <span className={`font-bold ${fuelSurcharge > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
                 {fuelSurcharge > 0 ? `$${fuelSurcharge.toFixed(2)}` : 'Enter miles'}
