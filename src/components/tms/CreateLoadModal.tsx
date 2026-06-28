@@ -227,7 +227,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                 {shipperList.length > 0 && !showAddShipper && (
                   <select defaultValue="" onChange={e => { applyShipper(e.target.value); e.target.value = ''; }}
                     className="text-sm border border-brand-300 text-brand-600 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500 bg-brand-50">
-                    <option value="" disabled>Select shipper -></option>
+                    <option value="" disabled>Select shipper...</option>
                     {shipperList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
@@ -280,7 +280,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
                 {receiverList.length > 0 && !showAddReceiver && (
                   <select defaultValue="" onChange={e => { applyReceiver(e.target.value); e.target.value = ''; }}
                     className="text-sm border border-purple-300 text-purple-600 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-purple-50">
-                    <option value="" disabled>Select receiver -></option>
+                    <option value="" disabled>Select receiver...</option>
                     {receiverList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 )}
