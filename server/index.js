@@ -875,7 +875,7 @@ app.post('/api/loads/:id/assign', authMiddleware, async (req, res) => {
     const { driver_id } = req.body;
     if (!driver_id) return res.status(400).json({ error: 'driver_id is required' });
     const result = await pool.query(
-      `UPDATE loads SET driver_id = $1, status = 'dispatched'
+      `UPDATE loads SET driver_id = $1, status = 'DISPATCHED'
        WHERE id = $2 AND company_id = $3 RETURNING *`,
       [driver_id, req.params.id, req.user.company_id]
     );
