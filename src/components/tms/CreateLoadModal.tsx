@@ -9,6 +9,20 @@ interface Props {
   onCreated: () => void;
 }
 
+
+const APPT_TIMES = [
+  { value: '', label: '------' },
+  { value: 'FCFS', label: 'FCFS – First Come First Serve' },
+  ...Array.from({ length: 24 }, (_, i) => {
+    const hour = i % 12 === 0 ? 12 : i % 12;
+    const ampm = i < 12 ? 'AM' : 'PM';
+    return [
+      { value: String(hour).padStart(2,'0') + ':00 ' + ampm, label: hour + ':00 ' + ampm },
+      { value: String(hour).padStart(2,'0') + ':30 ' + ampm, label: hour + ':30 ' + ampm },
+    ];
+  }).flat(),
+];
+
 export default function CreateLoadModal({ customers: initialCustomers, onClose, onCreated }: Props) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [shippers, setShippers] = useState<Shipper[]>([]);
@@ -16,7 +30,7 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
   const [form, setForm] = useState({
     load_number: '', customer_id: '', origin_address: '', origin_city: '', origin_state: '',
     dest_address: '', dest_city: '', dest_state: '', pickup_date: '', delivery_date: '',
-    rate: '', miles: '', cargo_description: '',
+    rate: '', miles: '', cargo_description: '', pickup_appt_time: '', delivery_appt_time: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
