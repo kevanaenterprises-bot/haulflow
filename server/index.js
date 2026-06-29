@@ -1178,7 +1178,7 @@ app.patch('/api/settings', authMiddleware, async (req, res) => {
 app.get('/api/driver/loads', driverAuthMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT l.*, s.name AS shipper_name
+      `SELECT l.id, l.company_id, l.load_number, l.status, l.driver_id, l.customer_id, l.origin_address, l.origin_city, l.origin_state, l.origin_zip, l.dest_address, l.dest_city, l.dest_state, l.destination_address, l.destination_city, l.destination_state, l.destination_zip, l.pickup_date, l.delivery_date, l.pickup_appt_time, l.delivery_appt_time, l.cargo_description, l.commodity, l.weight, l.bol_number, l.miles, l.miles_driven, l.fuel_surcharge, l.lumper_fee, l.acceptance_token, l.accepted_at, l.delivered_at, l.pod_url, l.pod_urls, l.driver_notes, l.notes, l.shipper_lat, l.shipper_lng, l.receiver_lat, l.receiver_lng, l.geofence_radius, l.truck_id, l.trailer_number, l.shipper_id, l.shipper_name, l.created_at, s.name AS shipper_name
        FROM loads l
        LEFT JOIN shippers s ON s.id = l.shipper_id
        WHERE l.driver_id = $1 AND l.company_id = $2
