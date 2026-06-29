@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, User } from 'lucide-react';
+import { X, User, Sparkles } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Load, Driver } from '../../types';
 
@@ -19,6 +19,8 @@ export default function AssignDriverModal({ load, drivers, onClose, onAssigned }
   const [selected, setSelected] = useState<string>(load.driver_id || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<{ driver_id: string; name: string; reason: string } | null>(null);
 
   const handleAssign = async () => {
     if (!selected) return;
@@ -34,6 +36,25 @@ export default function AssignDriverModal({ load, drivers, onClose, onAssigned }
     }
   };
 
+  const suggestDriver = async () => {
+    setSuggesting(true);
+    setSuggestion(null);
+    setError('');
+    try {
+      const result = await api.post('/api/suggest-driver', { load_id: load.id });
+      if (result?.suggestion) {
+        setSuggestion({ driver_id: result.suggestion.id, name: result.suggestion.name, reason: result.reason });
+        setSelected(result.suggestion.id);
+      } else {
+        setError(result?.reason || 'No suggestion available.');
+      }
+    } catch (err: any) {
+      setError('Could not get AI suggestion. ' + (err.message || ''));
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
@@ -43,6 +64,22 @@ export default function AssignDriverModal({ load, drivers, onClose, onAssigned }
             <p className="text-sm text-gray-500">Load #{load.load_number}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="px-6 pb-3">
+          <button
+            onClick={suggestDriver}
+            disabled={suggesting}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-sm font-medium transition disabled:opacity-50"
+          >
+            <Sparkles className="w-4 h-4" />
+            {suggesting ? 'Analyzing drivers...' : '✨ AI Suggest Best Driver'}
+          </button>
+          {suggestion && (
+            <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-800">
+              <span className="font-semibold">Suggested: {suggestion.name}</span>
+              <p className="text-purple-600 mt-0.5">{suggestion.reason}</p>
+            </div>
+          )}
         </div>
 
         {/* Scrollable driver list - THIS IS THE FIX */}
