@@ -381,8 +381,7 @@ export default function DriverDashboard({ driver, onLogout }: Props) {
                   <span className="text-xl font-bold">#{load.load_number}</span>
                   {load.customer_name && <p className="text-gray-400 text-sm mt-0.5">{load.customer_name}</p>}
                 </div>
-                {load.rate && <span className="text-brand-400 font-bold text-lg">{formatCurrency(load.rate)}</span>}
-              </div>
+                              </div>
             </div>
 
             {/* Route */}
