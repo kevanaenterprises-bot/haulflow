@@ -163,6 +163,8 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
         destination_state: form.dest_state || null,
         pickup_date: form.pickup_date || null,
         delivery_date: form.delivery_date || null,
+        pickup_appt_time: form.pickup_appt_time || null,
+        delivery_appt_time: form.delivery_appt_time || null,
         rate: form.rate ? parseFloat(form.rate) : null,
         miles: form.miles ? parseInt(form.miles) : null,
         commodity: form.cargo_description || null,
@@ -283,6 +285,18 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
               <Field label="City *" value={form.origin_city} onChange={v => set('origin_city', v)} />
               <Field label="State *" value={form.origin_state} onChange={v => set('origin_state', v)} placeholder="TX" />
               <Field label="Pickup Date" type="date" value={form.pickup_date} onChange={v => set('pickup_date', v)} />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Appt Time</label>
+                <select
+                  value={form.pickup_appt_time}
+                  onChange={e => set('pickup_appt_time', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {APPT_TIMES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -336,6 +350,18 @@ export default function CreateLoadModal({ customers: initialCustomers, onClose, 
               <Field label="City *" value={form.dest_city} onChange={v => set('dest_city', v)} />
               <Field label="State *" value={form.dest_state} onChange={v => set('dest_state', v)} placeholder="TX" />
               <Field label="Delivery Date" type="date" value={form.delivery_date} onChange={v => set('delivery_date', v)} />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Appt Time</label>
+                <select
+                  value={form.delivery_appt_time}
+                  onChange={e => set('delivery_appt_time', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {APPT_TIMES.map(t => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
