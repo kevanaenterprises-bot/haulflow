@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Truck, CheckCircle, Shield } from 'lucide-react';
+import { Truck, CheckCircle } from 'lucide-react';
 import { api } from '../lib/api';
 
 export default function OnboardingPage() {
@@ -119,39 +119,35 @@ export default function OnboardingPage() {
           <div>
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Company Info</h3>
             <div className="space-y-3">
+              {/* DOT lookup — top of form */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={form.dot_number}
+                    onChange={e => set('dot_number', e.target.value)}
+                    placeholder="Enter DOT # to auto-fill company info"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={dotLookupLoading || !form.dot_number}
+                    onClick={handleDotLookup}
+                    className="px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold rounded-lg transition disabled:opacity-40 whitespace-nowrap"
+                  >
+                    {dotLookupLoading ? '...' : 'Auto-Fill'}
+                  </button>
+                </div>
+                {dotLookupError && <p className="text-xs text-red-500 mt-1">{dotLookupError}</p>}
+                {dotFilled && <p className="text-xs text-green-600 mt-1">✓ Carrier info loaded from FMCSA</p>}
+              </div>
               <Field label="Company Name *" value={form.company_name} onChange={v => set('company_name', v)} placeholder="ABC Trucking LLC" required />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Company Email" value={form.company_email} onChange={v => set('company_email', v)} type="email" placeholder="billing@company.com" />
                 <Field label="Company Phone" value={form.company_phone} onChange={v => set('company_phone', v)} placeholder="555-000-0000" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={form.dot_number}
-                      onChange={e => set('dot_number', e.target.value)}
-                      placeholder="1234567"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                    <button
-                      type="button"
-                      disabled={dotLookupLoading || !form.dot_number}
-                      onClick={handleDotLookup}
-                      className="px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold rounded-lg transition disabled:opacity-40 whitespace-nowrap"
-                    >
-                      {dotLookupLoading ? '...' : 'Auto-Fill'}
-                    </button>
-                  </div>
-                  {dotLookupError && <p className="text-xs text-red-500 mt-1">{dotLookupError}</p>}
-                  {dotFilled && <p className="text-xs text-green-600 mt-1">✓ Carrier info loaded from FMCSA</p>}
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 flex items-center gap-1">
-                <Shield className="w-3 h-3" /> MC and DOT numbers are optional but used for compliance reports.
-              </p>
+              <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />
             </div>
           </div>
 
