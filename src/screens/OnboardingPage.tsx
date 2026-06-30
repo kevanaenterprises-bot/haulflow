@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Truck, CheckCircle } from 'lucide-react';
+import { Truck } from 'lucide-react';
 import { api } from '../lib/api';
 
 export default function OnboardingPage() {
@@ -10,8 +10,6 @@ export default function OnboardingPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
-  const [ownerName, setOwnerName] = useState('');
 
   const [dotLookupLoading, setDotLookupLoading] = useState(false);
   const [dotLookupError, setDotLookupError] = useState('');
@@ -56,46 +54,18 @@ export default function OnboardingPage() {
         password: form.password,
       });
 
-      // Auto-login: store token and user, then redirect into the app
+      // Store auth so user is logged in after payment
       localStorage.setItem('hf_token', data.token);
       localStorage.setItem('hf_user', JSON.stringify(data.user));
       localStorage.setItem('hf_company', JSON.stringify(data.company));
-      setOwnerName(data.user.name.split(' ')[0]);
-      setDone(true);
+
+      // Send to subscribe page to complete payment, then setup wizard
+      window.location.href = '/subscribe';
     } catch (err: any) {
       setError(err.message);
+      setLoading(false);
     }
-    setLoading(false);
   };
-
-  if (done) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-            <CheckCircle className="w-12 h-12 text-green-500" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">You're in, {ownerName}! 🎉</h2>
-          <p className="text-gray-500 mb-2">Your HaulFlow account is ready.</p>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-left">
-            <p className="text-sm font-semibold text-blue-800 mb-2">✅ Your account is ready</p>
-            <p className="text-sm text-blue-700">We sent a welcome email with your next steps. To get started:</p>
-            <ol className="text-sm text-blue-700 mt-2 ml-4 list-decimal space-y-1">
-              <li>Add your first driver</li>
-              <li>Add a customer or shipper</li>
-              <li>Create and dispatch your first load</li>
-            </ol>
-          </div>
-          <button
-            onClick={() => window.location.href = '/'}
-            className="block w-full bg-brand-500 hover:bg-brand-600 text-white py-3 rounded-xl font-semibold transition"
-          >
-            Go to My Dashboard →
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 flex items-center justify-center p-4">
@@ -119,7 +89,7 @@ export default function OnboardingPage() {
           <div>
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Company Info</h3>
             <div className="space-y-3">
-              {/* DOT lookup — top of form */}
+              {/* DOT lookup */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
                 <div className="flex gap-2">
@@ -140,7 +110,7 @@ export default function OnboardingPage() {
                   </button>
                 </div>
                 {dotLookupError && <p className="text-xs text-red-500 mt-1">{dotLookupError}</p>}
-                {dotFilled && <p className="text-xs text-green-600 mt-1">✓ Carrier info loaded from FMCSA</p>}
+                {dotFilled && <p className="text-xs text-green-600 mt-1">Carrier info loaded from FMCSA</p>}
               </div>
               <Field label="Company Name *" value={form.company_name} onChange={v => set('company_name', v)} placeholder="ABC Trucking LLC" required />
               <div className="grid grid-cols-2 gap-3">
@@ -175,7 +145,7 @@ export default function OnboardingPage() {
             disabled={loading}
             className="w-full bg-brand-500 hover:bg-brand-600 text-white py-3 rounded-xl font-semibold transition disabled:opacity-50 text-base"
           >
-            {loading ? 'Creating your account...' : 'Create Account →'}
+            {loading ? 'Creating your account...' : 'Continue to Payment →'}
           </button>
 
           <p className="text-center text-xs text-gray-400">
@@ -184,7 +154,7 @@ export default function OnboardingPage() {
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-                            <button type="button" onClick={() => { ['hf_token','hf_demo_expires_at','hf_user','hf_company'].forEach(k => localStorage.removeItem(k)); window.location.href = '/'; }} className="text-brand-500 font-medium hover:underline">Sign in</button>
+            <button type="button" onClick={() => { ['hf_token','hf_demo_expires_at','hf_user','hf_company'].forEach(k => localStorage.removeItem(k)); window.location.href = '/'; }} className="text-brand-500 font-medium hover:underline">Sign in</button>
           </p>
         </form>
       </div>
