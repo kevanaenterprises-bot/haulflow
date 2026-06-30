@@ -1081,7 +1081,45 @@ app.post('/api/shippers', authMiddleware, async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create shipper', details: err.message });
+    res.status(500).json({ error: 'Failed to create shipper', details: err.message })
+
+// PATCH /api/shippers/:id — update a shipper or receiver
+app.patch('/api/shippers/:id', authMiddleware, async (req, res) => {
+  try {
+    const b = req.body;
+    const fields = [];
+    const values = [];
+    const allowed = ['type','name','address','city','state','zip','contact_name','contact_phone','contact_email'];
+    for (const key of allowed) {
+      if (key in b) {
+        fields.push(key + ' = $' + (values.length + 1));
+        values.push(b[key] || null);
+      }
+    }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    const idIdx = values.length + 1;
+    const companyIdx = values.length + 2;
+    values.push(req.params.id, req.user.company_id);
+    const result = await pool.query(
+      'UPDATE shippers SET ' + fields.join(', ') + ' WHERE id = $' + idIdx + ' AND company_id = $' + companyIdx + ' RETURNING *',
+      values
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Shipper not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update shipper', details: err.message });
+  }
+});
+
+// DELETE /api/shippers/:id — delete a shipper or receiver
+app.delete('/api/shippers/:id', authMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM shippers WHERE id = $1 AND company_id = $2', [req.params.id, req.user.company_id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete shipper', details: err.message });
+  }
+});;
   }
 });
 
