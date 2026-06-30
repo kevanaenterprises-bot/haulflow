@@ -1495,8 +1495,8 @@ const PLANS = {
   'founding-1yr': {
     label: 'Founding Owner-Op',
     amount: 15000, // $150/mo after trial
-    trialDays: 365, // 1 year free
-    description: '1 year free, then $150/mo. Any platform.',
+    trialDays: 180, // 6 months free
+    description: '6 months free, then $150/mo. Any platform.',
     slotLimit: 25,
     slotStatus: 'founding_1yr',
     requiresAndroid: false,
