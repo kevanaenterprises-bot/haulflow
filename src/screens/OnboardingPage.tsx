@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Truck } from 'lucide-react';
 import { api } from '../lib/api';
+import InteractiveAvatar from '../components/avatar/InteractiveAvatar';
 
 export default function OnboardingPage() {
   const [form, setForm] = useState({
@@ -158,6 +159,9 @@ export default function OnboardingPage() {
           </p>
         </form>
       </div>
+
+      {/* Kristy — available to answer signup questions */}
+      <InteractiveAvatar context="onboard" />
     </div>
   );
 }
