@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { X, MessageCircle } from 'lucide-react';
 import { createClient } from '@anam-ai/js-sdk';
 
 // ─── Working Hours Logic ───────────────────────────────────────────────
-const WORKING_HOURS_START = 8;  // 8 AM Central Time
-const WORKING_HOURS_END = 18;   // 6 PM Central Time
+const WORKING_HOURS_START = 8; // 8 AM Central Time
+const WORKING_HOURS_END = 18;  // 6 PM Central Time
 
 function getCentralHour(): number {
   return parseInt(
@@ -33,6 +33,17 @@ function getNextOpenTime(): string {
 // ─── Kristy's profile picture URL ───────────────────────────────────────────────
 const KRISTY_AVATAR_URL =
   'https://customer-assets.emergentagent.com/wingman/6bc070fc-a70c-40b9-ab7e-ce8bf7ccc7ff/attachments/7e9ca85c59c6448bb9d1c05e0ad669f5_Screenshot%202026-05-16%20at%203.50.02_PM.png';
+
+// ─── Context-aware tooltip messages ────────────────────────────────────────────
+export type KristyContext = 'demo' | 'onboard' | 'subscribe' | 'setup' | 'dashboard';
+
+const CONTEXT_LABELS: Record<KristyContext, string> = {
+  demo:      'Questions about HaulFlow? Ask me!',
+  onboard:   'Need help signing up? I\'m here!',
+  subscribe: 'Questions about pricing? Ask me!',
+  setup:     'Setting up? I can walk you through it!',
+  dashboard: 'Need help? Ask me anything!',
+};
 
 // ─── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -116,7 +127,7 @@ const OfflinePanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 type SessionStatus = 'idle' | 'connecting' | 'streaming' | 'error';
 
-const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const AvatarPanel: React.FC<{ onClose: () => void; context: KristyContext }> = ({ onClose, context }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null);
 
@@ -142,7 +153,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       const client = createClient(sessionToken);
       clientRef.current = client;
 
-      // 3. Stream to video and audio elements by ID (fixes "[object HTMLVideoElement] not found" error)
+      // 3. Stream to video and audio elements by ID
       await client.streamToVideoAndAudioElements('anam-video-element', 'anam-audio-element');
 
       setStatus('streaming');
@@ -158,9 +169,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   useEffect(() => {
     return () => {
       if (clientRef.current) {
-        try {
-          clientRef.current.stopStreaming();
-        } catch { /* ignore */ }
+        try { clientRef.current.stopStreaming(); } catch { /* ignore */ }
         clientRef.current = null;
       }
     };
@@ -172,6 +181,15 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       : status === 'error'
       ? errorMsg || 'Connection failed'
       : null;
+
+  // Context-aware idle message
+  const idleMessages: Record<KristyContext, string> = {
+    demo:      'Hi! I\'m Kristy. Ask me anything about HaulFlow!',
+    onboard:   'Hi! I\'m Kristy. I can help you through the signup process.',
+    subscribe: 'Hi! Questions about plans or pricing? I\'ve got answers.',
+    setup:     'Hi! I\'m Kristy. Let me help you get your account set up!',
+    dashboard: 'Hi! I\'m Kristy, your HaulFlow assistant. What can I help you with?',
+  };
 
   return (
     <div
@@ -263,6 +281,7 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="text-center px-4">
               <p className="text-white font-semibold text-base">Kristy</p>
               <p className="text-blue-200 text-xs mt-1">HaulFlow AI Assistant</p>
+              <p className="text-slate-300 text-xs mt-2 leading-relaxed">{idleMessages[context]}</p>
             </div>
             <button
               onClick={startStream}
@@ -282,10 +301,15 @@ const AvatarPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-const InteractiveAvatar: React.FC = () => {
+interface InteractiveAvatarProps {
+  context?: KristyContext;
+}
+
+const InteractiveAvatar: React.FC<InteractiveAvatarProps> = ({ context = 'demo' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [withinHours, setWithinHours] = useState(isWithinWorkingHours());
   const [showPulse, setShowPulse] = useState(true);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -294,21 +318,43 @@ const InteractiveAvatar: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Show tooltip after 3 seconds to draw attention, then hide after 5 more seconds
   useEffect(() => {
-    if (isOpen) setShowPulse(false);
+    const showTimer = setTimeout(() => setShowTooltip(true), 3000);
+    const hideTimer = setTimeout(() => setShowTooltip(false), 8000);
+    return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setShowPulse(false);
+      setShowTooltip(false);
+    }
   }, [isOpen]);
 
   const handleOpen = () => setIsOpen(true);
   const handleClose = () => setIsOpen(false);
 
+  const tooltipText = CONTEXT_LABELS[context];
+
   return (
     <div className="fixed bottom-6 right-6 z-50" style={{ zIndex: 9999 }}>
       {isOpen && (
         withinHours ? (
-          <AvatarPanel onClose={handleClose} />
+          <AvatarPanel onClose={handleClose} context={context} />
         ) : (
           <OfflinePanel onClose={handleClose} />
         )
+      )}
+
+      {/* Auto-popup tooltip bubble */}
+      {!isOpen && showTooltip && (
+        <div className="absolute bottom-full right-0 mb-3 pointer-events-none">
+          <div className="bg-slate-900 text-white text-xs font-medium px-3 py-2 rounded-xl whitespace-nowrap shadow-lg max-w-[220px] leading-relaxed text-center animate-in slide-in-from-bottom-2 duration-300">
+            {tooltipText}
+            <div className="absolute top-full right-5 -mt-1 w-2 h-2 bg-slate-900 rotate-45" />
+          </div>
+        </div>
       )}
 
       <button
@@ -344,15 +390,6 @@ const InteractiveAvatar: React.FC = () => {
           </div>
         )}
       </button>
-
-      {!isOpen && (
-        <div className="absolute bottom-full right-0 mb-3 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="bg-slate-900 text-white text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap shadow-lg">
-            {withinHours ? 'Chat with Kristy' : 'Kristy is offline'}
-            <div className="absolute top-full right-5 -mt-1 w-2 h-2 bg-slate-900 rotate-45" />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
