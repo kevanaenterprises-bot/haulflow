@@ -142,14 +142,14 @@ export default function DemoRequestPage() {
             <span style={{ background: 'linear-gradient(90deg, #f97316, #fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>No Contracts.</span> No Surprises.
           </h2>
           <p className="text-gray-400 text-center mb-16 max-w-xl mx-auto">Built for one-truck owner-operators and growing fleets alike.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
             {/* Founding 50 — highlighted */}
             <div className="rounded-2xl p-8 border-2 border-orange-500 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-xs font-bold px-4 py-1 rounded-full">First 50 Only</div>
               <div className="font-black text-xl mb-2">Founding Owner-Op</div>
               <div className="text-4xl font-black mb-1">Free<span className="text-lg font-normal text-gray-400"> / 1 year</span></div>
-              <div className="text-gray-400 text-sm mb-8">For the first 50 owner-operators. One truck.</div>
+              <div className="text-gray-400 text-sm mb-8">Free for the first 50 sign-ups. Up to 25 trucks, one full year.</div>
               <ul className="space-y-3 mb-8 text-sm">
                 {['Full platform access', 'Live GPS & dispatch', 'Automated invoicing', 'IFTA reports', 'Road Tour for drivers'].map(f => (
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />{f}</li>
@@ -162,7 +162,7 @@ export default function DemoRequestPage() {
             <div className="rounded-2xl p-8 border border-gray-800">
               <div className="font-black text-xl mb-2">Owner-Operator</div>
               <div className="text-4xl font-black mb-1">$150<span className="text-lg font-normal text-gray-400">/mo</span></div>
-              <div className="text-gray-400 text-sm mb-8">Single truck. Everything you need to run lean.</div>
+              <div className="text-gray-400 text-sm mb-8">1 truck. Everything you need to run lean.</div>
               <ul className="space-y-3 mb-8 text-sm">
                 {['Full platform access', 'Live GPS & dispatch', 'Automated invoicing', 'IFTA reports', 'Road Tour for drivers'].map(f => (
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />{f}</li>
@@ -173,16 +173,43 @@ export default function DemoRequestPage() {
 
             {/* Fleet / Standard */}
             <div className="rounded-2xl p-8 border border-gray-800">
-              <div className="font-black text-xl mb-2">Fleet</div>
+              <div className="font-black text-xl mb-2">Small Fleet</div>
               <div className="text-4xl font-black mb-1">$350<span className="text-lg font-normal text-gray-400">/mo</span></div>
-              <div className="text-gray-400 text-sm mb-8">Multi-truck operations. The full command center.</div>
+              <div className="text-gray-400 text-sm mb-8">2–20 trucks. The full command center.</div>
               <ul className="space-y-3 mb-8 text-sm">
-                {['Everything in Owner-Op', 'Unlimited trucks & drivers', 'Driver portal & pre-trip', 'Geo-digital timestamps', 'Priority support'].map(f => (
+                {['Everything in Owner-Op', 'Unlimited trucks & drivers', 'Driver portal & pre-trip', 'Geo-digital timestamps', 'Dedicated support — every customer matters'].map(f => (
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />{f}</li>
                 ))}
               </ul>
               <a href="/subscribe" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
             </div>
+
+            {/* Growing Fleet */}
+            <div className="rounded-2xl p-8 border border-gray-800">
+              <div className="font-black text-xl mb-2">Growing Fleet</div>
+              <div className="text-4xl font-black mb-1">$500<span className="text-lg font-normal text-gray-400">/mo</span></div>
+              <div className="text-gray-400 text-sm mb-8">21–50 trucks. Built to scale with you.</div>
+              <ul className="space-y-3 mb-8 text-sm">
+                {['Everything in Small Fleet', 'Unlimited trucks & drivers', 'Driver portal & pre-trip', 'Geo-digital timestamps', 'Dedicated support — every customer matters'].map(f => (
+                  <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-purple-400 flex-shrink-0 mt-0.5" />{f}</li>
+                ))}
+              </ul>
+              <a href="/subscribe" className="block text-center bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-full py-3 transition-colors">Get Started</a>
+            </div>
+
+            {/* Large Fleet — Contact */}
+            <div className="rounded-2xl p-8 border border-gray-800">
+              <div className="font-black text-xl mb-2">Large Fleet</div>
+              <div className="text-4xl font-black mb-1">Let's<span className="text-lg font-normal text-gray-400"> talk</span></div>
+              <div className="text-gray-400 text-sm mb-8">51+ trucks. Not our primary market — but every carrier deserves the same seat at the table. Reach out and let's figure it out together.</div>
+              <ul className="space-y-3 mb-8 text-sm">
+                {['Everything in Growing Fleet', 'Custom onboarding', 'Flexible pricing', 'Built around your operation', 'Dedicated support — every customer matters'].map(f => (
+                  <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />{f}</li>
+                ))}
+              </ul>
+              <a href="#demo-form" className="block text-center bg-orange-500 hover:bg-orange-400 text-white font-bold rounded-full py-3 transition-colors">Get in Touch</a>
+            </div>
+
           </div>
         </div>
       </section>
