@@ -1311,6 +1311,48 @@ app.patch('/api/driver/loads/:id/status', driverAuthMiddleware, async (req, res)
   }
 });
 // ---------------------------------------------------------------------------
+// FMCSA DOT# Lookup Proxy — GET /api/fmcsa/lookup?dot=1234567
+// Keeps the API key server-side; called from the onboarding page
+// ---------------------------------------------------------------------------
+app.get('/api/fmcsa/lookup', async (req, res) => {
+  try {
+    const { dot } = req.query;
+    if (!dot || !/^\d{1,8}$/.test(dot.trim())) {
+      return res.status(400).json({ error: 'Valid DOT number is required.' });
+    }
+    const apiKey = process.env.FMCSA_API_KEY;
+    if (!apiKey) {
+      return res.status(503).json({ error: 'FMCSA lookup not configured on this server.' });
+    }
+    const url = `https://mobile.fmcsa.dot.gov/qc/services/carriers/${dot.trim()}?webKey=${apiKey}`;
+    const fmcsaRes = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!fmcsaRes.ok) {
+      return res.status(fmcsaRes.status).json({ error: 'FMCSA returned an error. Check your DOT number.' });
+    }
+    const data = await fmcsaRes.json();
+    const c = data?.content?.carrier;
+    if (!c) return res.status(404).json({ error: 'Carrier not found for that DOT number.' });
+
+    res.json({
+      legalName:       c.legalName   || '',
+      dbaName:         c.dbaName     || '',
+      phone:           c.telephone   || '',
+      address:         c.phyStreet   || '',
+      city:            c.phyCity     || '',
+      state:           c.phyState    || '',
+      zip:             c.phyZip      || '',
+      mcNumber:        c.mcNumber    ? 'MC-' + c.mcNumber : '',
+      dotNumber:       String(c.dotNumber || dot),
+      operatingStatus: c.allowedToOperate || '',
+    });
+  } catch (err) {
+    console.error('[FMCSA] Lookup error:', err.message);
+    res.status(500).json({ error: 'FMCSA lookup failed. Please try again.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Self-Service Onboarding â POST /api/onboard
 // Creates a new company + admin user, returns auto-login token
 // ---------------------------------------------------------------------------
