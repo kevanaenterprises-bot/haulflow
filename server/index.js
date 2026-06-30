@@ -1081,7 +1081,9 @@ app.post('/api/shippers', authMiddleware, async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to create shipper', details: err.message })
+    res.status(500).json({ error: 'Failed to create shipper', details: err.message });
+  }
+});
 
 // PATCH /api/shippers/:id — update a shipper or receiver
 app.patch('/api/shippers/:id', authMiddleware, async (req, res) => {
@@ -1118,8 +1120,6 @@ app.delete('/api/shippers/:id', authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete shipper', details: err.message });
-  }
-});;
   }
 });
 
