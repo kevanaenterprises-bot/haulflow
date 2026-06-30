@@ -89,6 +89,11 @@ async function runMigrations() {
     `ALTER TABLE loads ADD COLUMN IF NOT EXISTS notes TEXT`,
     `ALTER TABLE loads ADD COLUMN IF NOT EXISTS pickup_appt_time VARCHAR(20)`,
     `ALTER TABLE loads ADD COLUMN IF NOT EXISTS delivery_appt_time VARCHAR(20)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS shipper_lat DECIMAL(10,7)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS shipper_lng DECIMAL(10,7)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS receiver_lat DECIMAL(10,7)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS receiver_lng DECIMAL(10,7)`,
+    `ALTER TABLE loads ADD COLUMN IF NOT EXISTS geofence_radius INTEGER DEFAULT 300`,
     // invoices
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS customer_id UUID`,
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS due_date DATE`,
