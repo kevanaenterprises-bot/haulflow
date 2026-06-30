@@ -22,9 +22,7 @@ export default function OnboardingPage() {
     setDotLookupError('');
     setDotFilled(false);
     try {
-      const res = await fetch(`/api/fmcsa/lookup?dot=${form.dot_number.trim()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lookup failed');
+      const data = await api.get(`/api/fmcsa/lookup?dot=${form.dot_number.trim()}`);
       setForm(p => ({
         ...p,
         company_name: p.company_name || data.legalName || data.dbaName,
