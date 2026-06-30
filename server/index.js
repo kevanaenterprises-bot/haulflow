@@ -901,6 +901,69 @@ app.get('/api/drivers', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/loads/:id/regenerate-geofence — geocode shipper or receiver address
+app.post('/api/loads/:id/regenerate-geofence', authMiddleware, async (req, res) => {
+  try {
+    const { side } = req.body; // 'shipper' or 'receiver'
+    if (!side || !['shipper', 'receiver'].includes(side)) {
+      return res.status(400).json({ error: 'side must be shipper or receiver' });
+    }
+
+    // Fetch the load
+    const loadResult = await pool.query(
+      'SELECT * FROM loads WHERE id = $1 AND company_id = $2',
+      [req.params.id, req.user.company_id]
+    );
+    const load = loadResult.rows[0];
+    if (!load) return res.status(404).json({ error: 'Load not found' });
+
+    // Build address string for geocoding
+    let address, city, state;
+    if (side === 'shipper') {
+      address = load.origin_address;
+      city = load.origin_city;
+      state = load.origin_state;
+    } else {
+      address = load.destination_address;
+      city = load.destination_city;
+      state = load.destination_state;
+    }
+
+    if (!city || !state) {
+      return res.status(400).json({ error: 'No address data available for geocoding' });
+    }
+
+    const query = [address, city, state, 'USA'].filter(Boolean).join(', ');
+
+    // Use Nominatim (OpenStreetMap) - free, no key needed
+    const geoUrl = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
+    const geoRes = await fetch(geoUrl, {
+      headers: { 'User-Agent': 'HaulFlow-TMS/1.0' }
+    });
+    const geoData = await geoRes.json();
+
+    if (!geoData || geoData.length === 0) {
+      return res.status(404).json({ error: 'Could not geocode address: ' + query });
+    }
+
+    const lat = parseFloat(geoData[0].lat);
+    const lng = parseFloat(geoData[0].lon);
+
+    // Save to DB
+    const latCol = side === 'shipper' ? 'shipper_lat' : 'receiver_lat';
+    const lngCol = side === 'shipper' ? 'shipper_lng' : 'receiver_lng';
+
+    const result = await pool.query(
+      'UPDATE loads SET ' + latCol + ' = $1, ' + lngCol + ' = $2 WHERE id = $3 AND company_id = $4 RETURNING *',
+      [lat, lng, req.params.id, req.user.company_id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Geocoding failed', details: err.message });
+  }
+});
+
 app.post('/api/drivers', authMiddleware, async (req, res) => {
   try {
     const b = req.body;
