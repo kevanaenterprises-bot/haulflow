@@ -273,11 +273,11 @@ function LoadCard({ load, onAssign, onRefresh, onPreview, onViewDetail, onMarkPa
             </p>
           </div>
         )}
-        {load.dest_city && (
+        {load.destination_city && (
           <div>
             <p className="text-xs font-semibold text-brand-600 mb-0.5">Receiver</p>
             <p className="text-xs text-gray-600 leading-tight">
-              {[load.dest_address, load.dest_city, load.dest_state].filter(Boolean).join(', ')}
+              {[load.destination_address, load.destination_city, load.destination_state].filter(Boolean).join(', ')}
             </p>
           </div>
         )}
@@ -423,7 +423,7 @@ function LoadDetailModal({ load, onClose, onRefresh }: { load: Load; onClose: ()
     { label: 'Customer', value: load.customer_name },
     { label: 'Driver', value: load.driver_name },
     { label: 'Origin', value: [load.origin_address, load.origin_city, load.origin_state].filter(Boolean).join(', ') },
-    { label: 'Destination', value: [load.dest_address, load.dest_city, load.dest_state].filter(Boolean).join(', ') },
+    { label: 'Destination', value: [load.destination_address, load.destination_city, load.destination_state].filter(Boolean).join(', ') },
     { label: 'Pickup Date', value: load.pickup_date ? formatDate(load.pickup_date) : null },
     { label: 'Delivery Date', value: load.delivery_date ? formatDate(load.delivery_date) : null },
     { label: 'Cargo', value: load.cargo_description },
@@ -861,10 +861,10 @@ function InvoicePreviewModal({ load, onClose }: { load: Load; onClose: () => voi
                 {inv.delivery_date && <p className="text-gray-500">Delivery: {formatDate(inv.delivery_date)}</p>}
               </div>
             </div>
-            {(inv.origin_city || inv.dest_city) && (
+            {(inv.origin_city || inv.destination_city) && (
               <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center gap-2 text-gray-700">
                 <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                {inv.origin_city}, {inv.origin_state} → {inv.dest_city}, {inv.dest_state}
+                {inv.origin_city}, {inv.origin_state} → {inv.destination_city}, {inv.destination_state}
               </div>
             )}
             <table className="w-full text-sm border-t">
