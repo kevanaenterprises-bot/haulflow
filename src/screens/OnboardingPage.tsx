@@ -13,6 +13,31 @@ export default function OnboardingPage() {
   const [done, setDone] = useState(false);
   const [ownerName, setOwnerName] = useState('');
 
+  const [dotLookupLoading, setDotLookupLoading] = useState(false);
+  const [dotLookupError, setDotLookupError] = useState('');
+  const [dotFilled, setDotFilled] = useState(false);
+
+  const handleDotLookup = async () => {
+    setDotLookupLoading(true);
+    setDotLookupError('');
+    setDotFilled(false);
+    try {
+      const res = await fetch(`/api/fmcsa/lookup?dot=${form.dot_number.trim()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lookup failed');
+      setForm(p => ({
+        ...p,
+        company_name: p.company_name || data.legalName || data.dbaName,
+        company_phone: p.company_phone || data.phone,
+        mc_number: p.mc_number || data.mcNumber,
+      }));
+      setDotFilled(true);
+    } catch (err: any) {
+      setDotLookupError(err.message);
+    }
+    setDotLookupLoading(false);
+  };
+
   const set = (f: string, v: string) => setForm(p => ({ ...p, [f]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -103,7 +128,28 @@ export default function OnboardingPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />
-                <Field label="DOT Number" value={form.dot_number} onChange={v => set('dot_number', v)} placeholder="1234567" />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={form.dot_number}
+                      onChange={e => set('dot_number', e.target.value)}
+                      placeholder="1234567"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={dotLookupLoading || !form.dot_number}
+                      onClick={handleDotLookup}
+                      className="px-3 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold rounded-lg transition disabled:opacity-40 whitespace-nowrap"
+                    >
+                      {dotLookupLoading ? '...' : 'Auto-Fill'}
+                    </button>
+                  </div>
+                  {dotLookupError && <p className="text-xs text-red-500 mt-1">{dotLookupError}</p>}
+                  {dotFilled && <p className="text-xs text-green-600 mt-1">✓ Carrier info loaded from FMCSA</p>}
+                </div>
               </div>
               <p className="text-xs text-gray-400 flex items-center gap-1">
                 <Shield className="w-3 h-3" /> MC and DOT numbers are optional but used for compliance reports.
