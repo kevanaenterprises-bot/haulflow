@@ -146,10 +146,10 @@ export default function DemoRequestPage() {
 
             {/* Founding 50 — highlighted */}
             <div className="rounded-2xl p-8 border-2 border-orange-500 relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-xs font-bold px-4 py-1 rounded-full">First 50 Only</div>
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-xs font-bold px-4 py-1 rounded-full">First 25 Only</div>
               <div className="font-black text-xl mb-2">Founding Owner-Op</div>
-              <div className="text-4xl font-black mb-1">Free<span className="text-lg font-normal text-gray-400"> / 1 year</span></div>
-              <div className="text-gray-400 text-sm mb-8">Free for the first 50 sign-ups. Up to 25 trucks, one full year.</div>
+              <div className="text-4xl font-black mb-1">Free<span className="text-lg font-normal text-gray-400"> / 6 months</span></div>
+              <div className="text-gray-400 text-sm mb-8">Free for the first 25 sign-ups. 1 truck, free for 6 months.</div>
               <ul className="space-y-3 mb-8 text-sm">
                 {['Full platform access', 'Live GPS & dispatch', 'Automated invoicing', 'IFTA reports', 'Road Tour for drivers'].map(f => (
                   <li key={f} className="flex gap-2"><CheckCircle className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />{f}</li>
