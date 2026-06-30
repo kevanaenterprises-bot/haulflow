@@ -1,6 +1,6 @@
 // Vercel Serverless Function — /api/avatar-chat
 // Kristy's "brain": receives a user message and returns Kristy's reply text
-// via OpenAI GPT, formatted as speech for LiveAvatar's TTS.
+// via OmniRoute (DeepSeek V4 Flash + free fallback), formatted as speech for LiveAvatar's TTS.
 
 const KRISTY_IDENTITY = `You are Kristy, a team member at HaulFlow — a modern Transportation Management System (TMS) built for trucking and freight companies.
 
@@ -88,9 +88,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'message is required' });
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) {
-    console.error('[avatar-chat] OPENAI_API_KEY not set');
+  const omniKey = process.env.OMNI_API_KEY;
+  if (!omniKey) {
+    console.error('[avatar-chat] OMNI_API_KEY not set');
     return res.status(500).json({ error: 'AI service not configured' });
   }
 
@@ -111,15 +111,15 @@ export default async function handler(req, res) {
   messages.push({ role: 'user', content: message });
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://omni.turtlelogisticsllc.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'gpt-4o-mini', messages, max_tokens: 200, temperature: 0.7 }),
+      headers: { 'Authorization': `Bearer ${omniKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'kristy-deepseek', messages, max_tokens: 200, temperature: 0.7 }),
     });
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      console.error('[avatar-chat] OpenAI error:', response.status, errData);
+      console.error('[avatar-chat] OmniRoute error:', response.status, errData);
       return res.status(502).json({ error: 'AI service error', details: errData });
     }
 
@@ -127,7 +127,7 @@ export default async function handler(req, res) {
     const speech_text = data.choices?.[0]?.message?.content?.trim();
 
     if (!speech_text) {
-      console.error('[avatar-chat] No content in OpenAI response:', data);
+      console.error('[avatar-chat] No content in OmniRoute response:', data);
       return res.status(502).json({ error: 'Empty AI response' });
     }
 
