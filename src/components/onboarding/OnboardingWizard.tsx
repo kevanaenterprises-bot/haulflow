@@ -1,4 +1,4 @@
-—import { useState } from 'react';
+import { useState } from 'react';
 import { Truck, CheckCircle, Building2, FileSpreadsheet, Users, FileText, ArrowRight, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
 import StepCompanyProfile from './StepCompanyProfile';
