@@ -939,9 +939,13 @@ app.post('/api/loads/:id/regenerate-geofence', authMiddleware, async (req, res) 
     }
 
     const query = [address, city, state, 'USA'].filter(Boolean).join(', ');
-mc_number, dot_number,
-mc_number, dot_number, tax_id,
-      admin_name, admin_email, password,if (!geoData || geoData.length === 0) {
+
+        // Use Nominatim (OpenStreetMap) - free, no key needed
+        const geoUrl = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
+        const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'HaulFlow-TMS/1.0' } });
+        const geoData = await geoRes.json();
+
+        if (!geoData || geoData.length === 0) {
       return res.status(404).json({ error: 'Could not geocode address: ' + query });
     }
 
@@ -1385,8 +1389,8 @@ app.post('/api/onboard', onboardingLimiter, async (req, res) => {
           // Store MC/DOT if provided
           if (mc_number || dot_number) {
                   await pool.query(
-                            `UPDATE companies SET mc_number = $1, dot_number = $2 WHERE id = $3`,
-                            [mc_number || null, dot_number || null, company.id]
+                            `UPDATE companies SET mc_number = $1, dot_number = $2, tax_id = $3 WHERE id = $4`,
+                            [mc_number || null, dot_number || null, tax_id || null, company.id]
                           ).catch(() => {}); // columns may not exist yet â non-fatal
           }
 
