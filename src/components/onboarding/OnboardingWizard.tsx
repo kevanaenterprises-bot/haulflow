@@ -38,6 +38,52 @@ export interface InvoiceConfigData {
   logoPreview: string;
 }
 
+
+// Refreshes auth state from the server then drops user into dashboard
+function GoToDashboardButton() {
+  const [loading, setLoading] = useState(false);
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('hf_token');
+      if (token) {
+        // Re-fetch company info so AuthContext has fresh data on load
+        const res = await fetch(
+          (import.meta.env.VITE_API_URL || 'https://haulflow-production-575a.up.railway.app') + '/api/company',
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          const company = await res.json();
+          localStorage.setItem('hf_company', JSON.stringify(company));
+        }
+        // Re-fetch user info
+        const uRes = await fetch(
+          (import.meta.env.VITE_API_URL || 'https://haulflow-production-575a.up.railway.app') + '/api/auth/me',
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (uRes.ok) {
+          const userData = await uRes.json();
+          localStorage.setItem('hf_user', JSON.stringify(userData.user || userData));
+        }
+      }
+    } catch (_) {
+      // Non-fatal — redirect anyway, login page will catch them if needed
+    }
+    window.location.href = '/';
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className="w-full bg-brand-500 hover:bg-brand-600 text-white py-3 rounded-xl font-semibold transition disabled:opacity-60"
+    >
+      {loading ? 'Loading your dashboard...' : 'Go to Dashboard →'}
+    </button>
+  );
+}
+
 export default function OnboardingWizard() {
   const [currentStep, setCurrentStep] = useState(1);
   const [completed, setCompleted] = useState(false);
@@ -149,9 +195,7 @@ export default function OnboardingWizard() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">You're All Set!</h2>
           <p className="text-slate-400 mb-6">Your HaulFlow account has been configured. Welcome aboard.</p>
-          <button onClick={() => window.location.href = '/'} className="w-full bg-brand-500 hover:bg-brand-600 text-white py-3 rounded-xl font-semibold transition">
-            Go to Dashboard
-          </button>
+          <GoToDashboardButton />
         </div>
       </div>
       <InteractiveAvatar context="setup" />

@@ -634,6 +634,35 @@ function getMailTransporter() {
   });
 }
 
+
+// GET /api/auth/me — returns current user from token (used after setup to refresh localStorage)
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.email, u.name, u.role, u.company_id,
+              c.name AS company_name
+       FROM users u
+       JOIN companies c ON c.id = u.company_id
+       WHERE u.id = $1 AND u.is_active = true`,
+      [req.user.user_id]
+    );
+    const user = result.rows[0];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        company_id: user.company_id,
+        company_name: user.company_name,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
 app.post('/api/auth/forgot-password', resetLimiter, async (req, res) => {
   try {
     const { email } = req.body;
