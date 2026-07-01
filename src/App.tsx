@@ -8,7 +8,7 @@ import DemoRequestPage from './screens/DemoRequestPage';
 import SubscribePage from './screens/SubscribePage';
 import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
-import CustomersView from './screens/CstomersView';
+import CustomersView from './screens/CustomersView';
 import InvoicesView from './screens/InvoicesView';
 import PaidInvoicesView from './screens/PaidInvoicesView';
 import ShippersView from './screens/ShippersView';
