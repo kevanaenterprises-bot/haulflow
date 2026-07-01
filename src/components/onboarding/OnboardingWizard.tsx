@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Truck, CheckCircle, FileSpreadsheet, Users, FileText, ArrowRight, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
-import StepDataImport from './StepDataImport';
+import StepDataImport, { ManualDriver, ManualTruck } from './StepDataImport';
 import StepTeamInvites from './StepTeamInvites';
 import StepInvoiceConfig from './StepInvoiceConfig';
 
@@ -65,6 +65,8 @@ export default function OnboardingWizard() {
   }, []);
 
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [manualDrivers, setManualDrivers] = useState<ManualDriver[]>([]);
+  const [manualTrucks,  setManualTrucks]  = useState<ManualTruck[]>([]);
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
     { id: crypto.randomUUID(), name: '', role: 'dispatcher', email: '', phone: '' },
@@ -199,7 +201,14 @@ export default function OnboardingWizard() {
         <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
           <div className="p-6 sm:p-8">
             {currentStep === 1 && (
-              <StepDataImport files={uploadedFiles} onFilesChange={setUploadedFiles} />
+              <StepDataImport
+                files={uploadedFiles}
+                onFilesChange={setUploadedFiles}
+                manualDrivers={manualDrivers}
+                onManualDriversChange={setManualDrivers}
+                manualTrucks={manualTrucks}
+                onManualTrucksChange={setManualTrucks}
+              />
             )}
             {currentStep === 2 && (
               <StepTeamInvites members={teamMembers} onChange={setTeamMembers} />

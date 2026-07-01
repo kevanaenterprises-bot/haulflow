@@ -1468,10 +1468,12 @@ app.post('/api/onboard', onboardingLimiter, async (req, res) => {
 app.post('/api/setup/complete', authMiddleware, async (req, res) => {
     try {
           const {
-                  // Company profile (Step 1)
+                  // Company profile
                   legalName, dotNumber, mcNumber, primaryHubAddress, taxId,
-                  // Invoice config (Step 4)
+                  // Invoice config
                   startingInvoiceNumber, billingPhone, billingEmail, shopAlertEmail,
+                  // Manual data entry
+                  manualDrivers, manualTrucks,
           } = req.body || {};
 
           const company_id = req.user.company_id;
@@ -1496,6 +1498,37 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
                             `UPDATE companies SET ${updates.join(', ')} WHERE id = $${idx}`,
                             values
                           );
+          }
+
+          // Save manually entered drivers
+          if (Array.isArray(manualDrivers)) {
+            for (const d of manualDrivers) {
+              if (!d.name?.trim()) continue;
+              const hash = d.portal_password
+                ? crypto.createHash('sha256').update(d.portal_password).digest('hex')
+                : null;
+              await pool.query(
+                `INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, status${hash ? ', password_hash' : ''})
+                 VALUES ($1,$2,$3,$4,$5,$6,'available'${hash ? ',$7' : ''})`,
+                [company_id, d.name.trim(), d.phone||null, d.email||null,
+                 d.cdl_number||null, d.cdl_expiry||null, ...(hash ? [hash] : [])]
+              ).catch(() => {});
+            }
+          }
+
+          // Save manually entered trucks / trailers
+          if (Array.isArray(manualTrucks)) {
+            for (const t of manualTrucks) {
+              if (!t.unit_number?.trim()) continue;
+              await pool.query(
+                `INSERT INTO trucks (company_id, unit_number, type, year, make, model, vin, license_plate, state, status)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active')`,
+                [company_id, t.unit_number.trim(), t.type||'truck',
+                 t.year ? parseInt(t.year) : null,
+                 t.make||null, t.model||null, t.vin||null,
+                 t.license_plate||null, t.plate_state||null]
+              ).catch(() => {});
+            }
           }
 
           console.log(`[SETUP] Company ${company_id} setup complete`);
