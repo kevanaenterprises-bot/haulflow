@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Truck, CheckCircle, FileSpreadsheet, Users, FileText, ArrowRight, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
-import StepDataImport, { ManualDriver, ManualTruck } from './StepDataImport';
+import StepDataImport, { ManualDriver, ManualTruck, ImportedSheet } from './StepDataImport';
 import InteractiveAvatar from '../avatar/InteractiveAvatar';
 import StepTeamInvites from './StepTeamInvites';
 import StepInvoiceConfig from './StepInvoiceConfig';
@@ -68,6 +68,7 @@ export default function OnboardingWizard() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [manualDrivers, setManualDrivers] = useState<ManualDriver[]>([]);
   const [manualTrucks,  setManualTrucks]  = useState<ManualTruck[]>([]);
+  const [importedSheets, setImportedSheets] = useState<ImportedSheet[]>([]);
 
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
     { id: crypto.randomUUID(), name: '', role: 'dispatcher', email: '', phone: '' },
@@ -209,6 +210,8 @@ export default function OnboardingWizard() {
                 onManualDriversChange={setManualDrivers}
                 manualTrucks={manualTrucks}
                 onManualTrucksChange={setManualTrucks}
+                importedSheets={importedSheets}
+                onImportedSheetsChange={setImportedSheets}
               />
             )}
             {currentStep === 2 && (

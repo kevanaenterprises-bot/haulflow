@@ -1474,6 +1474,8 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
                   startingInvoiceNumber, billingPhone, billingEmail, shopAlertEmail,
                   // Manual data entry
                   manualDrivers, manualTrucks,
+                  // CSV imported sheets
+                  importedSheets,
           } = req.body || {};
 
           const company_id = req.user.company_id;
@@ -1528,6 +1530,64 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
                  t.make||null, t.model||null, t.vin||null,
                  t.license_plate||null, t.plate_state||null]
               ).catch(() => {});
+            }
+          }
+
+          // Save CSV-imported sheets
+          if (Array.isArray(importedSheets)) {
+            for (const sheet of importedSheets) {
+              const { sheetType, rows } = sheet;
+              if (!Array.isArray(rows)) continue;
+
+              for (const row of rows) {
+                try {
+                  if (sheetType === 'drivers') {
+                    if (!row.name?.trim()) continue;
+                    await pool.query(
+                      `INSERT INTO drivers (company_id, name, phone, email, license_number, license_expiry, hire_date, status)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,'available')`,
+                      [company_id, row.name.trim(), row.phone||null, row.email||null,
+                       row.license_number||null, row.license_expiry||null, row.hire_date||null]
+                    );
+                  } else if (sheetType === 'trucks') {
+                    if (!row.unit_number?.trim()) continue;
+                    const truckType = (row.type||'truck').toLowerCase().includes('trailer') ? 'trailer' : 'truck';
+                    await pool.query(
+                      `INSERT INTO trucks (company_id, unit_number, type, year, make, model, vin, license_plate, state, status)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active')`,
+                      [company_id, row.unit_number.trim(), truckType,
+                       row.year ? parseInt(row.year) : null,
+                       row.make||null, row.model||null, row.vin||null,
+                       row.license_plate||null, row.plate_state||null]
+                    );
+                  } else if (sheetType === 'customers') {
+                    if (!row.company_name?.trim()) continue;
+                    await pool.query(
+                      `INSERT INTO customers (company_id, company_name, contact_name, contact_phone, email, address, city, state)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+                      [company_id, row.company_name.trim(), row.contact_name||null,
+                       row.contact_phone||null, row.email||null,
+                       row.address||null, row.city||null, row.state||null]
+                    );
+                  } else if (sheetType === 'loads') {
+                    if (!row.load_number?.trim()) continue;
+                    await pool.query(
+                      `INSERT INTO loads (company_id, load_number, origin_city, origin_state, destination_city, destination_state,
+                         pickup_date, delivery_date, rate, miles, status, commodity)
+                       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'DELIVERED',$11)`,
+                      [company_id, row.load_number.trim(),
+                       row.origin_city||null, row.origin_state||null,
+                       row.destination_city||null, row.destination_state||null,
+                       row.pickup_date||null, row.delivery_date||null,
+                       row.rate ? parseFloat(row.rate.replace(/[^0-9.]/g,'')) : null,
+                       row.miles ? parseInt(row.miles) : null,
+                       row.commodity||null]
+                    );
+                  }
+                } catch (rowErr) {
+                  console.warn(`[SETUP] Skipped row in ${sheetType}:`, rowErr.message);
+                }
+              }
             }
           }
 
