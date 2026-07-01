@@ -939,15 +939,9 @@ app.post('/api/loads/:id/regenerate-geofence', authMiddleware, async (req, res) 
     }
 
     const query = [address, city, state, 'USA'].filter(Boolean).join(', ');
-
-    // Use Nominatim (OpenStreetMap) - free, no key needed
-    const geoUrl = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query);
-    const geoRes = await fetch(geoUrl, {
-      headers: { 'User-Agent': 'HaulFlow-TMS/1.0' }
-    });
-    const geoData = await geoRes.json();
-
-    if (!geoData || geoData.length === 0) {
+mc_number, dot_number,
+mc_number, dot_number, tax_id,
+      admin_name, admin_email, password,if (!geoData || geoData.length === 0) {
       return res.status(404).json({ error: 'Could not geocode address: ' + query });
     }
 
