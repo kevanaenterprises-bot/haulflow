@@ -80,8 +80,6 @@ function Inner() {
                   );
   }
     
-      if (path === '/resume' || path === '/resume/') { return <ResumePage />; }
-
       if (window.location.pathname === '/onboard') {
               return <OnboardingPage />;
       }
@@ -111,7 +109,11 @@ function Inner() {
 export default function App() {
       const path = window.location.pathname;
     
-      if (path === '/privacy') {
+      if (path === '/resume' || path === '/resume/') {
+    return <ResumePage />;
+  }
+
+  if (path === '/privacy') {
               return <PrivacyPolicyPage />;
       }
     
