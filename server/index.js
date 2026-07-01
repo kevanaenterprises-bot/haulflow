@@ -102,6 +102,8 @@ async function runMigrations() {
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS load_id UUID`,
     // companies
     `ALTER TABLE companies ADD COLUMN IF NOT EXISTS shop_alert_email VARCHAR(255)`,    `ALTER TABLE companies ADD COLUMN IF NOT EXISTS tax_id VARCHAR(50)`,
+    // setup completion tracking
+    `ALTER TABLE companies ADD COLUMN IF NOT EXISTS setup_complete BOOLEAN DEFAULT false`,
     // visitor tracking
     `CREATE TABLE IF NOT EXISTS visitor_logs (
       id SERIAL PRIMARY KEY,
@@ -536,6 +538,30 @@ app.get('/api/admin/health', adminAuthMiddleware, async (_req, res) => {
 // ---------------------------------------------------------------------------
 // Health check (Railway uses this)
 // ---------------------------------------------------------------------------
+// GET /api/session/status — returns where a logged-in user is in the signup flow
+app.get('/api/session/status', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT subscription_status, setup_complete FROM companies WHERE id = $1',
+      [req.user.company_id]
+    );
+    const company = result.rows[0];
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const stripe_paid = [
+      'active', 'founding_1yr', 'founding_6mo', 'founding'
+    ].includes(company.subscription_status);
+
+    res.json({
+      stripe_paid,
+      setup_complete: !!company.setup_complete,
+      subscription_status: company.subscription_status,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to check session status' });
+  }
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'HaulFlow API', timestamp: new Date().toISOString() });
 });
@@ -1474,6 +1500,7 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
 
           console.log(`[SETUP] Company ${company_id} setup complete`);
           logActivity('setup_complete', `Company ${company_id} completed setup wizard`, company_id);
+          await pool.query('UPDATE companies SET setup_complete = true WHERE id = $1', [company_id]);
           res.json({ success: true });
     } catch (err) {
           console.error('[SETUP] Error:', err.message);

@@ -6,6 +6,8 @@ import OnboardingPage from './screens/OnboardingPage';
 import SetupWizardPage from './screens/SetupWizardPage';
 import DemoRequestPage from './screens/DemoRequestPage';
 import SubscribePage from './screens/SubscribePage';
+import ResumePage from './screens/ResumePage';
+import ResumePage from './screens/ResumePage';
 import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
 import CustomersView from './screens/CustomersView';
@@ -78,6 +80,8 @@ function Inner() {
                   );
   }
     
+      if (path === '/resume' || path === '/resume/') { return <ResumePage />; }
+
       if (window.location.pathname === '/onboard') {
               return <OnboardingPage />;
       }
