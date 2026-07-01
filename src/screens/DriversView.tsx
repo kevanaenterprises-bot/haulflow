@@ -371,7 +371,7 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
         await api.patch(`/api/drivers/${driver.id}`, data);
       } else {
         // Create: POST — only send fields the API accepts to avoid SQL column mismatch
-        const createPayload = {
+        const createPayload: any = {
           name: data.name,
           phone: data.phone || null,
           email: data.email || null,
@@ -380,6 +380,8 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
           medical_card_expiry: data.medical_card_expiry || null,
           hire_date: data.hire_date || null,
           status: 'available',
+          // Include password in initial create so backend can send welcome SMS
+          ...(data.portal_password ? { portal_password: data.portal_password } : {}),
         };
         if (cdlFile && SUPABASE_URL) {
           createPayload.cdl_file_url = await uploadFile(cdlFile, `${Date.now()}-${cdlFile.name}`);
@@ -387,12 +389,7 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
         if (medFile && SUPABASE_URL) {
           createPayload.medical_card_file_url = await uploadFile(medFile, `${Date.now()}-${medFile.name}`);
         }
-        const res = await api.post('/api/drivers', createPayload);
-        // Handle portal password separately after driver is created
-        if (data.portal_password && res?.id) {
-          try { await api.post(`/api/drivers/${res.id}/set-password`, { password: data.portal_password }); }
-          catch { /* password set is best-effort */ }
-        }
+        await api.post('/api/drivers', createPayload);
       }
       onSaved();
     } catch (err: any) { setError(err.message); }
@@ -441,7 +438,23 @@ function DriverForm({ driver, onClose, onSaved }: { driver: Driver | null; onClo
               placeholder={driver ? '••••••••' : 'Set a password for driver app login'}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
-            <p className="text-xs text-gray-400 mt-1">Driver logs in at haulflow.vercel.app/driver using their phone number + this password.</p>
+            <p className="text-xs text-gray-400 mt-1">Driver logs in using their 10-digit phone number + this password.</p>
+            {driver && form.phone && (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.post(`/api/drivers/${driver.id}/resend-credentials`, {});
+                    alert('Credentials re-sent to ' + form.phone);
+                  } catch (err: any) {
+                    alert('Could not send text: ' + err.message);
+                  }
+                }}
+                className="mt-2 text-xs text-brand-500 hover:text-brand-700 hover:underline font-medium"
+              >
+                📱 Resend login credentials via text
+              </button>
+            )}
           </div>
 
           {/* File uploads */}

@@ -41,6 +41,74 @@ const pool = new Pool({
     : undefined,
 });
 
+
+// ---------------------------------------------------------------------------
+// SMS helper — sends driver welcome text via Twilio
+// ---------------------------------------------------------------------------
+async function sendDriverWelcomeSms(phone, driverName, password, companyName) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !fromNumber) {
+    console.warn('[SMS] Twilio not configured — skipping driver welcome text');
+    return false;
+  }
+
+  // Clean phone to E.164 — assume US if no country code
+  let to = phone.replace(/\D/g, '');
+  if (to.length === 10) to = '+1' + to;
+  else if (to.length === 11 && to.startsWith('1')) to = '+' + to;
+  else to = '+' + to;
+
+  const appStoreUrl  = 'https://apps.apple.com/app/haulflow/id6743787141';
+  const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.turtlelogistics.haulflow';
+
+  const message = [
+    `Hi ${driverName}! You've been added to ${companyName} on HaulFlow.`,
+    ``,
+    `Your login info:`,
+    `  Username: ${phone.replace(/\D/g, '').slice(-10)}`,
+    `  Password: ${password}`,
+    ``,
+    `Download the app:`,
+    `  iPhone: ${appStoreUrl}`,
+    `  Android: ${playStoreUrl}`,
+    ``,
+    `Questions? Reply to this message.`,
+  ].join('\n');
+
+  try {
+    const params = new URLSearchParams({
+      From: fromNumber,
+      To: to,
+      Body: message,
+    });
+    const resp = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      }
+    );
+    const data = await resp.json();
+    if (resp.ok) {
+      console.log(`[SMS] Welcome text sent to ${to} (SID: ${data.sid})`);
+      return true;
+    } else {
+      console.error('[SMS] Twilio error:', data.message || JSON.stringify(data));
+      return false;
+    }
+  } catch (err) {
+    console.error('[SMS] Send failed:', err.message);
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Startup: auto-migrate missing columns on the live DB
 // ---------------------------------------------------------------------------
@@ -1038,7 +1106,16 @@ app.post('/api/drivers', authMiddleware, async (req, res) => {
       result.rows[0].password_hash = hash;
     }
 
-    res.status(201).json(result.rows[0]);
+    // Send welcome SMS if phone and password provided
+    if (b.phone && b.portal_password) {
+      // Get company name for the message
+      const companyRes = await pool.query('SELECT name FROM companies WHERE id = $1', [req.user.company_id]);
+      const companyName = companyRes.rows[0]?.name || 'your carrier';
+      sendDriverWelcomeSms(b.phone, b.name || 'Driver', b.portal_password, companyName)
+        .catch(() => {}); // fire and forget — don't fail driver creation if SMS fails
+    }
+
+    res.status(201).json({ ...result.rows[0], sms_sent: !!(b.phone && b.portal_password) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create driver', details: err.message });
   }
@@ -1069,9 +1146,88 @@ app.patch('/api/drivers/:id', authMiddleware, async (req, res) => {
       values
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Driver not found' });
+
+    // If password was just changed, resend the welcome text
+    if (b.portal_password && result.rows[0].phone) {
+      const companyRes = await pool.query('SELECT name FROM companies WHERE id = $1', [req.user.company_id]);
+      const companyName = companyRes.rows[0]?.name || 'your carrier';
+      sendDriverWelcomeSms(result.rows[0].phone, result.rows[0].name || 'Driver', b.portal_password, companyName)
+        .catch(() => {});
+    }
+
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update driver', details: err.message });
+  }
+});
+
+
+// POST /api/drivers/:id/resend-credentials — resend welcome SMS to driver
+// Uses the stored password hash to confirm credentials exist, but sends a
+// message telling them to use the password their dispatcher set
+app.post('/api/drivers/:id/resend-credentials', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM drivers WHERE id = $1 AND company_id = $2',
+      [req.params.id, req.user.company_id]
+    );
+    const driver = result.rows[0];
+    if (!driver) return res.status(404).json({ error: 'Driver not found' });
+    if (!driver.phone) return res.status(400).json({ error: 'Driver has no phone number on file' });
+    if (!driver.password_hash) return res.status(400).json({ error: 'No password set for this driver yet' });
+
+    const companyRes = await pool.query('SELECT name FROM companies WHERE id = $1', [req.user.company_id]);
+    const companyName = companyRes.rows[0]?.name || 'your carrier';
+
+    const appStoreUrl  = 'https://apps.apple.com/app/haulflow/id6743787141';
+    const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.turtlelogistics.haulflow';
+
+    const phone10 = driver.phone.replace(/\D/g, '').slice(-10);
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken  = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !fromNumber) {
+      return res.status(503).json({ error: 'SMS not configured on this server' });
+    }
+
+    let to = driver.phone.replace(/\D/g, '');
+    if (to.length === 10) to = '+1' + to;
+    else if (!to.startsWith('+')) to = '+' + to;
+
+    const message = [
+      `Hi ${driver.name}! Here are your HaulFlow login credentials for ${companyName}.`,
+      ``,
+      `Username: ${phone10}`,
+      `Password: contact your dispatcher`,
+      ``,
+      `Download the app:`,
+      `  iPhone: ${appStoreUrl}`,
+      `  Android: ${playStoreUrl}`,
+    ].join('\n');
+
+    const params = new URLSearchParams({ From: fromNumber, To: to, Body: message });
+    const twilioRes = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      }
+    );
+    const twilioData = await twilioRes.json();
+    if (!twilioRes.ok) {
+      return res.status(502).json({ error: twilioData.message || 'SMS failed to send' });
+    }
+
+    console.log(`[SMS] Credentials resent to ${to} for driver ${driver.name}`);
+    res.json({ success: true, to });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to resend credentials', details: err.message });
   }
 });
 
