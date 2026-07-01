@@ -8,7 +8,7 @@ import DemoRequestPage from './screens/DemoRequestPage';
 import SubscribePage from './screens/SubscribePage';
 import LoadsView from './screens/LoadsView';
 import DriversView from './screens/DriversView';
-import CustomersView from './screens/CustomersView';
+import CustomersView from './screens/CstomersView';
 import InvoicesView from './screens/InvoicesView';
 import PaidInvoicesView from './screens/PaidInvoicesView';
 import ShippersView from './screens/ShippersView';
@@ -26,6 +26,7 @@ import WhatIsHaulFlowPage from './screens/WhatIsHaulFlowPage';
 import ComparePage from './screens/ComparePage';
 import ForgotPasswordPage from './screens/ForgotPasswordPage';
 import ResetPasswordPage from './screens/ResetPasswordPage';
+import SupportPage from './screens/SupportPage';
 
 type Tab = 'loads' | 'drivers' | 'customers' | 'invoices' | 'paid' | 'shippers' | 'employees' | 'fleet' | 'ifta' | 'trucks' | 'inspections' | 'settings';
 
@@ -133,6 +134,10 @@ export default function App() {
       if (path === '/reset-password' || path === '/reset-password/') {
               return <ResetPasswordPage />;
       }
+
+        if (path === '/support' || path === '/support/') {
+                  return <SupportPage />;
+        }
 
       if (path === '/admin' || path === '/admin/') {
               return <AdminDashboard />;
