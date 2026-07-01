@@ -1,4 +1,4 @@
-import { useState } from 'react';
+—import { useState } from 'react';
 import { Truck, CheckCircle, Building2, FileSpreadsheet, Users, FileText, ArrowRight, ArrowLeft } from 'lucide-react';
 import { api } from '../../lib/api';
 import StepCompanyProfile from './StepCompanyProfile';
@@ -7,10 +7,10 @@ import StepTeamInvites from './StepTeamInvites';
 import StepInvoiceConfig from './StepInvoiceConfig';
 
 const STEPS = [
-  { id: 1, label: 'Company Profile', icon: Building2 },
-  { id: 2, label: 'Data Import', icon: FileSpreadsheet },
-  { id: 3, label: 'Team Invites', icon: Users },
-  { id: 4, label: 'Invoice Config', icon: FileText },
+  { id: 1, label: 'Data Import', icon: FileSpreadsheet },
+  { id: 2, label: 'Team Invites', icon: Users },
+  { id: 3, label: 'Invoice Config', icon: FileText },
+  
   ];
 
 export interface CompanyProfileData {
@@ -63,13 +63,13 @@ export default function OnboardingWizard() {
           case 1: return !!companyProfile.legalName && !!companyProfile.dotNumber;
           case 2: return true;
           case 3: return true;
-          case 4: return !!invoiceConfig.startingInvoiceNumber;
+          case 3: return !!invoiceConfig.startingInvoiceNumber;
           default: return false;
         }
   };
 
   const handleNext = async () => {
-        if (currentStep < 4) {
+        if (currentStep < 3) {
                 setCurrentStep(s => s + 1);
         } else {
                 // Final step — save to backend
@@ -177,7 +177,7 @@ export default function OnboardingWizard() {
                                                               disabled={!canProceed() || saving}
                                                               className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold px-6 py-2.5 rounded-xl transition"
                                                             >
-                                                {saving ? 'Saving...' : currentStep === 4 ? 'Finish Setup' : 'Next'}
+                                                {saving ? 'Saving...' : currentStep === 3 ? 'Finish Setup' : 'Next'}
                                                 {!saving && <ArrowRight className="w-4 h-4" />}
                                               </button>
                                   </div>
