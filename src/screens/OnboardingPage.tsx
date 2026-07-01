@@ -5,7 +5,7 @@ import InteractiveAvatar from '../components/avatar/InteractiveAvatar';
 
 export default function OnboardingPage() {
   const [form, setForm] = useState({
-    company_name: '', company_email: '', company_phone: '',
+    company_name: '', dba_name: '', company_email: '', company_phone: '',
     mc_number: '', dot_number: '', tax_id: '',
     admin_name: '', admin_email: '', password: '', confirm_password: '',
   });
@@ -24,9 +24,10 @@ export default function OnboardingPage() {
       const data = await api.get(`/api/fmcsa/lookup?dot=${form.dot_number.trim()}`);
       setForm(p => ({
         ...p,
-        company_name: p.company_name || data.legalName || data.dbaName,
-        company_phone: p.company_phone || data.phone,
-        mc_number: p.mc_number || data.mcNumber,
+        company_name: p.company_name || data.legalName || data.dbaName || '',
+        dba_name: p.dba_name || data.dbaName || '',
+        company_phone: p.company_phone || data.phone || '',
+        mc_number: p.mc_number || data.mcNumber || '',
       }));
       setDotFilled(true);
     } catch (err: any) {
@@ -46,10 +47,12 @@ export default function OnboardingPage() {
     try {
       const data = await api.post('/api/onboard', {
         company_name: form.company_name,
+        dba_name: form.dba_name || undefined,
         company_email: form.company_email,
         company_phone: form.company_phone,
         mc_number: form.mc_number || undefined,
-        dot_number: form.dot_number || undefined,        tax_id: form.tax_id || undefined,
+        dot_number: form.dot_number || undefined,
+        tax_id: form.tax_id || undefined,
         admin_name: form.admin_name,
         admin_email: form.admin_email,
         password: form.password,
@@ -90,7 +93,8 @@ export default function OnboardingPage() {
           <div>
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Company Info</h3>
             <div className="space-y-3">
-              {/* DOT lookup */}
+
+              {/* DOT lookup — top of form */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">DOT Number</label>
                 <div className="flex gap-2">
@@ -111,14 +115,21 @@ export default function OnboardingPage() {
                   </button>
                 </div>
                 {dotLookupError && <p className="text-xs text-red-500 mt-1">{dotLookupError}</p>}
-                {dotFilled && <p className="text-xs text-green-600 mt-1">Carrier info loaded from FMCSA</p>}
+                {dotFilled && <p className="text-xs text-green-600 mt-1">✓ Carrier info loaded from FMCSA</p>}
               </div>
-              <Field label="Company Name *" value={form.company_name} onChange={v => set('company_name', v)} placeholder="ABC Trucking LLC" required />
+
+              <Field label="Legal Company Name *" value={form.company_name} onChange={v => set('company_name', v)} placeholder="ABC Trucking LLC" required />
+              <Field label="DBA (Doing Business As)" value={form.dba_name} onChange={v => set('dba_name', v)} placeholder="Optional — if different from legal name" />
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Company Email" value={form.company_email} onChange={v => set('company_email', v)} type="email" placeholder="billing@company.com" />
                 <Field label="Company Phone" value={form.company_phone} onChange={v => set('company_phone', v)} placeholder="555-000-0000" />
               </div>
-              <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />              <Field label="Tax ID (EIN)" value={form.tax_id} onChange={v => set('tax_id', v)} placeholder="XX-XXXXXXX" />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />
+                <Field label="FEIN / Tax ID (EIN)" value={form.tax_id} onChange={v => set('tax_id', v)} placeholder="XX-XXXXXXX" />
+              </div>
             </div>
           </div>
 
