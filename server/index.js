@@ -1890,6 +1890,36 @@ runMigrations().then(async () => {
     console.log('[SETUP] Demo account password reset (if needed)');
   } catch {}
 
+    // Apple App Review demo driver account — phone: 9038037500, password: Moon2026!
+    try {
+          const demoDriverHash = '41fc872ff4ee7f4b63886fddc1e7102884b8e954c6ff723c52124e63beafe0d6';
+          const demoDriverPhone = '9038037500';
+          // Check if demo driver exists
+          const existingDriver = await pool.query(
+                  `SELECT id FROM drivers WHERE phone = $1 LIMIT 1`,
+                  [demoDriverPhone]
+                );
+          if (existingDriver.rows.length === 0) {
+                  // Find any company to attach the demo driver to (use the first one)
+                  const anyCompany = await pool.query(`SELECT id FROM companies LIMIT 1`);
+                  if (anyCompany.rows.length > 0) {
+                            await pool.query(
+                                        `INSERT INTO drivers (company_id, name, phone, status, password_hash)
+                                                   VALUES ($1, 'Apple Review Driver', $2, 'available', $3)`,
+                                        [anyCompany.rows[0].id, demoDriverPhone, demoDriverHash]
+                                      );
+                            console.log('[SETUP] Apple demo driver created');
+                  }
+          } else {
+                  // Always keep password in sync
+                  await pool.query(
+                            `UPDATE drivers SET password_hash = $1 WHERE phone = $2`,
+                            [demoDriverHash, demoDriverPhone]
+                          );
+                  console.log('[SETUP] Apple demo driver password synced');
+          }
+    } catch (e) { console.warn('[SETUP] Demo driver seed failed:', e.message); }
+
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[HaulFlow] API server running on port ${PORT}`);
   });
