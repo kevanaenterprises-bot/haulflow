@@ -101,7 +101,7 @@ async function runMigrations() {
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS amount DECIMAL(10,2)`,
     `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS load_id UUID`,
     // companies
-    `ALTER TABLE companies ADD COLUMN IF NOT EXISTS shop_alert_email VARCHAR(255)`,
+    `ALTER TABLE companies ADD COLUMN IF NOT EXISTS shop_alert_email VARCHAR(255)`,    `ALTER TABLE companies ADD COLUMN IF NOT EXISTS tax_id VARCHAR(50)`,
     // visitor tracking
     `CREATE TABLE IF NOT EXISTS visitor_logs (
       id SERIAL PRIMARY KEY,
