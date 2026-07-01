@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import InteractiveAvatar from '../components/avatar/InteractiveAvatar';
 import { Truck, ArrowRight } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -109,5 +110,6 @@ export default function ResumePage() {
         </form>
       </div>
     </div>
+    <InteractiveAvatar context="onboard" />
   );
 }
