@@ -6,7 +6,7 @@ import InteractiveAvatar from '../components/avatar/InteractiveAvatar';
 export default function OnboardingPage() {
   const [form, setForm] = useState({
     company_name: '', company_email: '', company_phone: '',
-    mc_number: '', dot_number: '',
+    mc_number: '', dot_number: '', tax_id: '',
     admin_name: '', admin_email: '', password: '', confirm_password: '',
   });
   const [loading, setLoading] = useState(false);
@@ -49,7 +49,7 @@ export default function OnboardingPage() {
         company_email: form.company_email,
         company_phone: form.company_phone,
         mc_number: form.mc_number || undefined,
-        dot_number: form.dot_number || undefined,
+        dot_number: form.dot_number || undefined,        tax_id: form.tax_id || undefined,
         admin_name: form.admin_name,
         admin_email: form.admin_email,
         password: form.password,
@@ -118,7 +118,7 @@ export default function OnboardingPage() {
                 <Field label="Company Email" value={form.company_email} onChange={v => set('company_email', v)} type="email" placeholder="billing@company.com" />
                 <Field label="Company Phone" value={form.company_phone} onChange={v => set('company_phone', v)} placeholder="555-000-0000" />
               </div>
-              <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />
+              <Field label="MC Number" value={form.mc_number} onChange={v => set('mc_number', v)} placeholder="MC-123456" />              <Field label="Tax ID (EIN)" value={form.tax_id} onChange={v => set('tax_id', v)} placeholder="XX-XXXXXXX" />
             </div>
           </div>
 
