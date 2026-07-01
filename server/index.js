@@ -1505,6 +1505,8 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
                   manualDrivers, manualTrucks,
                   // CSV imported sheets
                   importedSheets,
+                  // Team invites
+                  teamMembers,
           } = req.body || {};
 
           const company_id = req.user.company_id;
@@ -1616,6 +1618,47 @@ app.post('/api/setup/complete', authMiddleware, async (req, res) => {
                 } catch (rowErr) {
                   console.warn(`[SETUP] Skipped row in ${sheetType}:`, rowErr.message);
                 }
+              }
+            }
+          }
+
+          // Save team members — dispatchers become users, drivers go to drivers table
+          if (Array.isArray(teamMembers)) {
+            for (const member of teamMembers) {
+              if (!member.name?.trim() || !member.email?.trim()) continue;
+              try {
+                if (member.role === 'dispatcher') {
+                  // Check if email already exists as a user
+                  const existing = await pool.query(
+                    'SELECT id FROM users WHERE email = $1',
+                    [member.email.toLowerCase().trim()]
+                  );
+                  if (existing.rows.length > 0) continue; // skip duplicates
+                  // Create a temporary password they'll reset on first login
+                  const tempPass = crypto.randomBytes(8).toString('hex');
+                  const hash = crypto.createHash('sha256').update(tempPass).digest('hex');
+                  await pool.query(
+                    `INSERT INTO users (company_id, name, email, password_hash, role, job_title, is_active)
+                     VALUES ($1, $2, $3, $4, 'dispatcher', 'Dispatcher', true)`,
+                    [company_id, member.name.trim(), member.email.toLowerCase().trim(), hash]
+                  );
+                  console.log(`[SETUP] Created dispatcher user: ${member.email}`);
+                } else if (member.role === 'driver') {
+                  // Add as a driver record
+                  const existing = await pool.query(
+                    'SELECT id FROM drivers WHERE email = $1 AND company_id = $2',
+                    [member.email.toLowerCase().trim(), company_id]
+                  );
+                  if (existing.rows.length > 0) continue;
+                  await pool.query(
+                    `INSERT INTO drivers (company_id, name, email, phone, status)
+                     VALUES ($1, $2, $3, $4, 'available')`,
+                    [company_id, member.name.trim(), member.email.toLowerCase().trim(), member.phone||null]
+                  );
+                  console.log(`[SETUP] Created driver: ${member.name}`);
+                }
+              } catch (memberErr) {
+                console.warn(`[SETUP] Skipped team member ${member.email}:`, memberErr.message);
               }
             }
           }

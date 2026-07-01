@@ -162,15 +162,23 @@ export default function OnboardingWizard() {
       setSaveError('');
       try {
         await api.post('/api/setup/complete', {
+          // Company profile
           legalName:             companyProfile.legalName,
           dotNumber:             companyProfile.dotNumber,
           mcNumber:              companyProfile.mcNumber,
           primaryHubAddress:     companyProfile.primaryHubAddress,
           taxId:                 companyProfile.taxId,
+          // Invoice config
           startingInvoiceNumber: invoiceConfig.startingInvoiceNumber,
           billingPhone:          invoiceConfig.billingPhone,
           billingEmail:          invoiceConfig.billingEmail,
           shopAlertEmail:        invoiceConfig.shopAlertEmail,
+          // Manual entry data
+          manualDrivers,
+          manualTrucks,
+          importedSheets,
+          // Team invites
+          teamMembers,
         });
         setCompleted(true);
       } catch (err: any) {
