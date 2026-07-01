@@ -141,6 +141,7 @@ export default function OnboardingWizard() {
 
   if (completed) {
     return (
+      <>
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 flex items-center justify-center p-4">
         <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-10 w-full max-w-md text-center">
           <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -153,10 +154,13 @@ export default function OnboardingWizard() {
           </button>
         </div>
       </div>
+      <InteractiveAvatar context="setup" />
+      </>
     );
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 flex flex-col">
       <header className="px-6 py-5 flex items-center gap-3 border-b border-slate-700/50">
         <div className="bg-brand-500 p-2 rounded-lg"><Truck className="w-5 h-5 text-white" /></div>
@@ -248,5 +252,7 @@ export default function OnboardingWizard() {
         </div>
       </div>
     </div>
+    <InteractiveAvatar context="setup" />
+    </>
   );
 }

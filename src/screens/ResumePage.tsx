@@ -42,6 +42,7 @@ export default function ResumePage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
 
@@ -111,5 +112,6 @@ export default function ResumePage() {
       </div>
     </div>
     <InteractiveAvatar context="onboard" />
+    </>
   );
 }
